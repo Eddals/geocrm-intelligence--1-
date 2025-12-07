@@ -291,13 +291,13 @@ const Discovery: React.FC<DiscoveryProps> = ({ addLeads, openAiKey, setDiscovery
                 onClick={() => setActiveTab('ai')}
                 className={`px-6 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === 'ai' ? 'bg-gray-100 text-gray-900 font-semibold shadow-sm' : 'text-gray-600 hover:bg-gray-50'}`}
             >
-                Busca Automática (IA)
+                Busca Automática
             </button>
             <button
                 onClick={() => setActiveTab('scraper')}
                 className={`px-6 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 ${activeTab === 'scraper' ? 'bg-gray-100 text-gray-900 font-semibold shadow-sm' : 'text-gray-600 hover:bg-gray-50'}`}
             >
-                Extração por Site (Perplexity)
+                Extração por Site
             </button>
             <button
                 onClick={() => setActiveTab('manual')}
