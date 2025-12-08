@@ -8,37 +8,14 @@ import Settings from './components/Settings';
 import EmailAutomation from './components/EmailAutomation';
 import WhatsAppButton from './components/WhatsAppButton';
 import Login from './components/Login';
+import Register from './components/Register';
 import { Lead, PipelineStage, Stats, ViewMode, AutomationRule, AppSettings, Notification, LeadHistory } from './types';
 import { enrichLeadData } from './services/geminiService';
 import { enrichLeadWithOpenAI } from './services/openaiService';
 import { X, CheckCircle2, AlertTriangle, Info } from 'lucide-react';
+import { supabaseRequest } from './services/supabaseClient';
 
 // Mock initial data used ONLY if storage is empty
-const DEFAULT_LEADS: Lead[] = [
-  {
-    id: '1',
-    name: 'Tech Solutions Ltd',
-    company: 'Tech Solutions Ltd',
-    email: 'contact@techsolutions.com',
-    phone: '11 99999-1234',
-    address: 'Av. Paulista, 1000',
-    city: 'São Paulo',
-    lat: -23.5615,
-    lng: -46.6559,
-    status: PipelineStage.QUALIFIED,
-    source: 'Manual',
-    value: 15000,
-    tags: ['Technology', 'B2B', 'VIP'],
-    tasks: [],
-    notes: 'Cliente interessado em contrato anual.',
-    history: [],
-    enriched: true,
-    contactRole: 'Diretor de TI',
-    leadPriority: 'High',
-    createdAt: new Date(Date.now() - 86400000 * 2).toISOString() 
-  }
-];
-
 const DEFAULT_AUTOMATIONS: AutomationRule[] = [
     {
         id: 'auto_enrich',
@@ -80,17 +57,15 @@ const DEFAULT_SETTINGS: AppSettings = {
 
 const App: React.FC = () => {
   // --- AUTH STATE ---
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
-      return localStorage.getItem('geocrm_auth') === 'true';
-  });
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
+  const [isSavingSettings, setIsSavingSettings] = useState(false);
 
   const [currentView, setCurrentView] = useState<ViewMode>('dashboard');
   
   // --- PERSISTENT STATE INITIALIZATION ---
-  const [leads, setLeads] = useState<Lead[]>(() => {
-      const saved = localStorage.getItem('geocrm_leads');
-      return saved ? JSON.parse(saved) : DEFAULT_LEADS;
-  });
+  const [leads, setLeads] = useState<Lead[]>([]);
 
   const [automations, setAutomations] = useState<AutomationRule[]>(() => {
       const saved = localStorage.getItem('geocrm_automations');
@@ -107,19 +82,6 @@ const App: React.FC = () => {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [discoveryResults, setDiscoveryResults] = useState<Partial<Lead>[]>([]);
 
-  // --- AUTO SAVE EFFECTS ---
-  useEffect(() => {
-      localStorage.setItem('geocrm_leads', JSON.stringify(leads));
-  }, [leads]);
-
-  useEffect(() => {
-      localStorage.setItem('geocrm_automations', JSON.stringify(automations));
-  }, [automations]);
-
-  useEffect(() => {
-      localStorage.setItem('geocrm_settings', JSON.stringify(settings));
-  }, [settings]);
-
   // Ensure dark mode is removed on mount
   useEffect(() => {
     document.documentElement.classList.remove('dark');
@@ -129,24 +91,73 @@ const App: React.FC = () => {
   // --------------------------
 
   // --- AUTH HANDLERS ---
-  const handleLogin = (userData?: Partial<AppSettings>) => {
+  const loadLeads = async (userId: string) => {
+      try {
+          const data = await supabaseRequest<Lead[]>('leads', { query: `?user_id=eq.${userId}` });
+          setLeads(data || []);
+      } catch (e) {
+          console.error('Erro ao carregar leads', e);
+          setLeads([]);
+      }
+  };
+
+  const handleLogin = async (userData?: Partial<AppSettings> & { id?: string }) => {
       if (userData) {
           setSettings(prev => ({
               ...prev,
               userName: userData.userName || prev.userName,
               userEmail: userData.userEmail || prev.userEmail,
               companyName: userData.companyName || prev.companyName,
-              companySector: userData.companySector || prev.companySector
+              companySector: userData.companySector || prev.companySector,
+              businessSummary: userData.businessSummary || prev.businessSummary,
+              userRole: userData.userRole || prev.userRole
           }));
+          if (userData.id) {
+              setCurrentUserId(userData.id);
+              await loadLeads(userData.id);
+          }
       }
       setIsAuthenticated(true);
-      localStorage.setItem('geocrm_auth', 'true');
+      setAuthMode('login');
   };
 
   const handleLogout = () => {
       setIsAuthenticated(false);
+      setCurrentUserId(null);
+      setLeads([]);
+      setAuthMode('login');
       localStorage.removeItem('geocrm_auth');
       setCurrentView('dashboard'); // Reset view on logout
+  };
+
+  const handleUpdateSettings = async (newSettings: AppSettings) => {
+      setSettings(newSettings);
+      if (currentUserId) {
+        setIsSavingSettings(true);
+        try {
+            await supabaseRequest('users', { 
+              method: 'PATCH', 
+              body: {
+                name: newSettings.userName,
+                email: newSettings.userEmail,
+                company_name: newSettings.companyName,
+                company_sector: newSettings.companySector,
+                business_summary: newSettings.businessSummary,
+                user_role: newSettings.userRole,
+                avatar_url: newSettings.userAvatar,
+                contact_phone: newSettings.contactPhone,
+                social_linkedin: newSettings.socialLinkedin,
+                social_instagram: newSettings.socialInstagram,
+                social_website: newSettings.socialWebsite
+              }, 
+              query: `?id=eq.${currentUserId}` 
+            });
+        } catch (e) {
+            console.error('Erro ao salvar configurações no Supabase', e);
+        } finally {
+            setIsSavingSettings(false);
+        }
+      }
   };
 
   // Derived Stats
@@ -235,16 +246,37 @@ const App: React.FC = () => {
     setLeads(prev => prev.map(l => 
       l.id === id ? { ...updatedLeadWithHistory, status: newStatus } : l
     ));
+    if (currentUserId) {
+        try {
+            await supabaseRequest('leads', { method: 'PATCH', body: { status: newStatus, history: updatedLeadWithHistory.history }, query: `?id=eq.${id}` });
+        } catch (e) {
+            console.error('Erro ao atualizar status no Supabase', e);
+        }
+    }
   };
 
-  const updateLeadDetails = (id: string, updates: Partial<Lead>) => {
+  const updateLeadDetails = async (id: string, updates: Partial<Lead>) => {
       setLeads(prev => prev.map(l => l.id === id ? { ...l, ...updates } : l));
       addNotification('Lead atualizado com sucesso.', 'success');
+      if (currentUserId) {
+        try {
+            await supabaseRequest('leads', { method: 'PATCH', body: updates, query: `?id=eq.${id}` });
+        } catch (e) {
+            console.error('Erro ao salvar lead no Supabase', e);
+        }
+      }
   };
 
-  const deleteLead = (id: string) => {
+  const deleteLead = async (id: string) => {
       setLeads(prev => prev.filter(l => l.id !== id));
       addNotification('Lead excluído com sucesso.', 'success');
+      if (currentUserId) {
+        try {
+            await supabaseRequest('leads', { method: 'DELETE', query: `?id=eq.${id}` });
+        } catch (e) {
+            console.error('Erro ao excluir lead no Supabase', e);
+        }
+      }
   };
 
   const handleAddLeads = async (newLeads: Partial<Lead>[]) => {
@@ -294,6 +326,15 @@ const App: React.FC = () => {
 
     setLeads(prev => [...prev, ...processedLeads]);
     addNotification(`${processedLeads.length} lead(s) adicionado(s).`, 'success');
+
+    if (currentUserId) {
+        try {
+            await supabaseRequest('leads', { method: 'POST', body: processedLeads.map(l => ({ ...l, user_id: currentUserId })), query: '' });
+            await loadLeads(currentUserId);
+        } catch (e) {
+            console.error('Erro ao persistir leads no Supabase', e);
+        }
+    }
   };
 
   const handleEnrichLead = async (id: string) => {
@@ -329,7 +370,7 @@ const App: React.FC = () => {
 
   const renderContent = () => {
     switch (currentView) {
-      case 'dashboard': return <Dashboard stats={stats} leads={leads} />;
+      case 'dashboard': return <Dashboard stats={stats} leads={leads} userName={settings.userName} />;
       case 'map':
         return <LeadMap 
             leads={leads} 
@@ -363,15 +404,20 @@ const App: React.FC = () => {
       case 'settings':
         return <Settings 
             settings={settings} 
-            updateSettings={setSettings} 
+            updateSettings={handleUpdateSettings} 
+            isSaving={isSavingSettings}
         />;
-      default: return <Dashboard stats={stats} leads={leads} />;
+      default: return <Dashboard stats={stats} leads={leads} userName={settings.userName} />;
     }
   };
 
-  // If not authenticated, show Login page
+  // If not authenticated, show Auth pages
   if (!isAuthenticated) {
-      return <Login onLogin={handleLogin} />;
+      return authMode === 'login' ? (
+        <Login onLogin={handleLogin} onSwitchToRegister={() => setAuthMode('register')} />
+      ) : (
+        <Register onRegister={handleLogin} onSwitchToLogin={() => setAuthMode('login')} />
+      );
   }
 
   return (
@@ -426,7 +472,7 @@ const App: React.FC = () => {
           ))}
       </div>
 
-      <main className="flex-1 ml-64 p-8 overflow-y-auto h-screen">
+      <main className="flex-1 ml-64 p-8 overflow-hidden h-screen">
         <header className="flex justify-between items-center mb-8">
             <h1 className="text-2xl font-bold capitalize text-gray-800">
                 {currentView === 'map' ? 'Mapa Inteligente' : currentView === 'settings' ? 'Configurações' : currentView === 'email-automation' ? 'Automação' : currentView}
