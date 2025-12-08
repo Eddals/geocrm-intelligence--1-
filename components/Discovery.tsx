@@ -1,8 +1,8 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Search, Loader2, PlusCircle, Globe, MapPin, Download, Building, User, Mail, Phone, DollarSign, Filter, Linkedin, Star, Link, ArrowRight, CheckCircle, XCircle, Instagram, Facebook, AlertOctagon, RefreshCw, ChevronDown, Sparkles } from 'lucide-react';
-import { discoverLeads } from '../services/geminiService';
+import { Search, Loader2, Globe, MapPin, Download, Building, User, Mail, Phone, DollarSign, Filter, Linkedin, Star, Link, ArrowRight, CheckCircle, XCircle, Instagram, Facebook, AlertOctagon, RefreshCw, ChevronDown, Sparkles, Factory, Hammer, UtensilsCrossed, ShoppingBag, GraduationCap, Truck, HeartPulse, Briefcase, PlusCircle as PlusCircleIcon } from 'lucide-react';
 import { discoverLeadsWithOpenAI } from '../services/openaiService';
+import { discoverLeadsWithPerplexity } from '../services/perplexityService';
 import { extractAndQualifyWithPerplexity } from '../services/perplexityScraperService';
 import { Lead, PipelineStage } from '../types';
 
@@ -11,6 +11,7 @@ interface DiscoveryProps {
   openAiKey?: string;
   setDiscoveryResults?: (results: Partial<Lead>[]) => void;
   userSector?: string;
+  notify?: (msg: string, type?: 'success' | 'info' | 'warning') => void;
 }
 
 const INDUSTRIES = [
@@ -28,6 +29,21 @@ const INDUSTRIES = [
     "Logística e Transporte",
     "Turismo e Hotelaria"
 ];
+const INDUSTRY_ICONS: Record<string, React.ReactNode> = {
+    "Tecnologia e Software": <Briefcase className="w-3 h-3" />,
+    "Saúde e Medicina": <HeartPulse className="w-3 h-3" />,
+    "Imobiliário": <Building className="w-3 h-3" />,
+    "Restaurantes e Alimentação": <UtensilsCrossed className="w-3 h-3" />,
+    "Varejo e E-commerce": <ShoppingBag className="w-3 h-3" />,
+    "Construção e Engenharia": <Hammer className="w-3 h-3" />,
+    "Serviços Financeiros": <DollarSign className="w-3 h-3" />,
+    "Serviços Jurídicos": <Briefcase className="w-3 h-3" />,
+    "Marketing e Publicidade": <Sparkles className="w-3 h-3" />,
+    "Educação": <GraduationCap className="w-3 h-3" />,
+    "Indústria e Manufatura": <Factory className="w-3 h-3" />,
+    "Logística e Transporte": <Truck className="w-3 h-3" />,
+    "Turismo e Hotelaria": <MapPin className="w-3 h-3" />
+};
 
 const RATING_OPTIONS = [
     { value: "", label: "Qualquer" },
@@ -54,7 +70,7 @@ const LOCATIONS = {
     }
 };
 
-const Discovery: React.FC<DiscoveryProps> = ({ addLeads, openAiKey, setDiscoveryResults, userSector }) => {
+const Discovery: React.FC<DiscoveryProps> = ({ addLeads, openAiKey, setDiscoveryResults, userSector, notify }) => {
   const [activeTab, setActiveTab] = useState<'ai' | 'scraper' | 'manual'>('ai');
 
   // AI Search State
@@ -78,6 +94,9 @@ const Discovery: React.FC<DiscoveryProps> = ({ addLeads, openAiKey, setDiscovery
   const [isLoading, setIsLoading] = useState(false);
   const [results, setResults] = useState<Partial<Lead>[]>([]);
   const [selectedIndices, setSelectedIndices] = useState<number[]>([]);
+  const [onlyContacts, setOnlyContacts] = useState(false);
+  const [sortBy, setSortBy] = useState<'relevance' | 'rating' | 'value'>('relevance');
+  const [isSortOpen, setIsSortOpen] = useState(false);
 
   // Manual Form State
   const initialForm = {
@@ -132,21 +151,21 @@ const Discovery: React.FC<DiscoveryProps> = ({ addLeads, openAiKey, setDiscovery
     
     try {
       let data: Partial<Lead>[] = [];
-      
-      if (openAiKey) {
+      // Prefer Perplexity
+      data = await discoverLeadsWithPerplexity(query, city, region, country === 'BR' ? 'Brasil' : 'USA', industry, ratingFilter);
+      // Fallback OpenAI se fornecido e Perplexity vazio
+      if (data.length === 0 && openAiKey) {
           data = await discoverLeadsWithOpenAI(query, city, region, country, industry, ratingFilter, openAiKey);
-      } else {
-          data = await discoverLeads(query, city, region, country, industry, ratingFilter);
       }
-      
+
       if (data.length === 0) {
-          alert("Nenhum resultado encontrado. Tente modificar sua busca.");
+          notify?.("Nenhum resultado encontrado. Tente modificar sua busca.", 'warning');
       }
       setResults(data);
       if (setDiscoveryResults) setDiscoveryResults(data);
     } catch (error: any) {
         console.error("Erro na busca:", error);
-        alert(error.message || "Ocorreu um erro ao buscar leads. Verifique sua conexão ou API Key.");
+        notify?.(error.message || "Ocorreu um erro ao buscar leads. Verifique sua conexão ou API Key.", 'warning');
     } finally {
       setIsLoading(false);
     }
@@ -166,7 +185,7 @@ const Discovery: React.FC<DiscoveryProps> = ({ addLeads, openAiKey, setDiscovery
           setScrapedLead(data);
       } catch (error: any) {
           console.error("Erro no scraping:", error);
-          alert(`Erro na extração: ${error.message || "Verifique a URL e tente novamente."}`);
+          notify?.(`Erro na extração: ${error.message || "Verifique a URL e tente novamente."}`, 'warning');
       } finally {
           setIsLoading(false);
       }
@@ -177,7 +196,7 @@ const Discovery: React.FC<DiscoveryProps> = ({ addLeads, openAiKey, setDiscovery
           addLeads([scrapedLead]);
           setScrapedLead(null);
           setTargetUrl('');
-          alert("Lead importado com sucesso!");
+          notify?.("Lead importado com sucesso!", 'success');
       }
   };
 
@@ -281,27 +300,28 @@ const Discovery: React.FC<DiscoveryProps> = ({ addLeads, openAiKey, setDiscovery
   return (
     <div className="h-full flex flex-col max-w-5xl mx-auto">
       <div className="mb-6 text-center">
+        <p className="inline-flex px-3 py-1 text-xs font-semibold bg-indigo-50 text-indigo-700 rounded-full border border-indigo-100 mb-3">Nova geração • IA + filtros inteligentes</p>
         <h2 className="text-3xl font-bold text-gray-800 mb-2">Captação de Leads</h2>
         <p className="text-gray-500">Adicione novos leads manualmente, via site ou utilize nossa IA.</p>
       </div>
 
       <div className="flex justify-center mb-8">
-        <div className="bg-white p-1 rounded-xl shadow-sm border border-gray-200 flex gap-2">
+        <div className="bg-white p-1 rounded-2xl shadow-sm border border-gray-200 flex gap-2">
             <button
                 onClick={() => setActiveTab('ai')}
-                className={`px-6 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === 'ai' ? 'bg-gray-100 text-gray-900 font-semibold shadow-sm' : 'text-gray-600 hover:bg-gray-50'}`}
+                className={`px-6 py-2 rounded-xl text-sm font-semibold transition-all ${activeTab === 'ai' ? 'bg-indigo-600 text-white shadow-sm' : 'text-gray-600 hover:bg-gray-50'}`}
             >
-                Busca Automática (IA)
+                Busca Automática
             </button>
             <button
                 onClick={() => setActiveTab('scraper')}
-                className={`px-6 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 ${activeTab === 'scraper' ? 'bg-gray-100 text-gray-900 font-semibold shadow-sm' : 'text-gray-600 hover:bg-gray-50'}`}
+                className={`px-6 py-2 rounded-xl text-sm font-semibold transition-all flex items-center gap-2 ${activeTab === 'scraper' ? 'bg-indigo-600 text-white shadow-sm' : 'text-gray-600 hover:bg-gray-50'}`}
             >
-                Extração por Site (Perplexity)
+                Extração por Site
             </button>
             <button
                 onClick={() => setActiveTab('manual')}
-                className={`px-6 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === 'manual' ? 'bg-gray-100 text-gray-900 font-semibold shadow-sm' : 'text-gray-600 hover:bg-gray-50'}`}
+                className={`px-6 py-2 rounded-xl text-sm font-semibold transition-all ${activeTab === 'manual' ? 'bg-indigo-600 text-white shadow-sm' : 'text-gray-600 hover:bg-gray-50'}`}
             >
                 Manual
             </button>
@@ -309,8 +329,8 @@ const Discovery: React.FC<DiscoveryProps> = ({ addLeads, openAiKey, setDiscovery
       </div>
 
       {activeTab === 'ai' && (
-        <>
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-200 mb-8 animate-fade-in">
+        <div className="grid grid-cols-1 xl:grid-cols-12 gap-8 items-start">
+          <div className="bg-white rounded-3xl shadow-sm border border-gray-100 mb-8 animate-fade-in xl:col-span-5 w-full p-1">
             {/* Header - CLEAN STYLE */}
             <div className="flex items-center gap-5 border-b border-gray-100 p-6 rounded-t-2xl">
                 <div>
@@ -322,32 +342,33 @@ const Discovery: React.FC<DiscoveryProps> = ({ addLeads, openAiKey, setDiscovery
                 </div>
             </div>
 
-            <form onSubmit={handleSearch} className="p-6 space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
+            <form onSubmit={handleSearch} className="p-6 space-y-4">
+              <div className="space-y-4">
                 {/* Search Query */}
-                <div className="md:col-span-12 lg:col-span-4 relative">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
+                <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4 pointer-events-none" />
                     <input
                     type="text"
-                    placeholder="Ex: Startups, Clínicas, Nome da Empresa..."
-                    className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-xl bg-transparent text-gray-900 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all placeholder-gray-400"
+                    placeholder="Ex: Startups, Clínicas..."
+                    className="w-full pl-9 pr-4 py-3 border border-gray-200 rounded-xl bg-transparent text-gray-900 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all placeholder-gray-400"
                     value={query}
                     onChange={(e) => setQuery(e.target.value)}
                     />
                 </div>
 
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 {/* Country Selector - Custom Dropdown */}
-                <div className="md:col-span-4 lg:col-span-2 relative" ref={countryRef}>
+                <div className="relative" ref={countryRef}>
                     <button
                         type="button"
                         onClick={() => setIsCountryOpen(!isCountryOpen)}
-                        className="w-full pl-4 pr-4 py-3 border border-gray-200 rounded-xl bg-white text-gray-900 focus:ring-2 focus:ring-indigo-500 outline-none transition-all flex items-center justify-between"
+                        className="w-full px-3 py-3 border border-gray-200 rounded-xl bg-white text-gray-900 focus:ring-2 focus:ring-indigo-500 outline-none transition-all flex items-center justify-between text-sm"
                     >
-                        <div className="flex items-center gap-2">
-                            <img src={LOCATIONS[country].flag} alt={country} className="w-5 h-auto rounded-sm shadow-sm" />
-                            <span className="text-sm">{LOCATIONS[country].name}</span>
+                        <div className="flex items-center gap-1.5 min-w-0">
+                            <img src={LOCATIONS[country].flag} alt={country} className="w-4 h-auto rounded-sm flex-shrink-0" />
+                            <span className="text-sm truncate">{LOCATIONS[country].name}</span>
                         </div>
-                        <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${isCountryOpen ? 'rotate-180' : ''}`} />
+                        <ChevronDown className={`w-3 h-3 text-gray-400 transition-transform flex-shrink-0 ${isCountryOpen ? 'rotate-180' : ''}`} />
                     </button>
                     
                     {isCountryOpen && (
@@ -371,16 +392,16 @@ const Discovery: React.FC<DiscoveryProps> = ({ addLeads, openAiKey, setDiscovery
                 </div>
                 
                 {/* State Selector - Custom Dropdown */}
-                <div className="md:col-span-4 lg:col-span-3 relative" ref={regionRef}>
+                <div className="relative" ref={regionRef}>
                     <button
                         type="button"
                         onClick={() => setIsRegionOpen(!isRegionOpen)}
-                        className="w-full px-4 py-3 border border-gray-200 rounded-xl bg-white text-gray-900 focus:ring-2 focus:ring-indigo-500 outline-none transition-all flex items-center justify-between text-left"
+                        className="w-full px-3 py-3 border border-gray-200 rounded-xl bg-white text-gray-900 focus:ring-2 focus:ring-indigo-500 outline-none transition-all flex items-center justify-between text-left text-sm"
                     >
-                        <span className={`text-sm ${!region ? 'text-gray-500' : 'text-gray-900'}`}>
-                            {region || "Estado (Todos)"}
+                        <span className={`text-sm truncate ${!region ? 'text-gray-500' : 'text-gray-900'}`}>
+                            {region || "Estado"}
                         </span>
-                        <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${isRegionOpen ? 'rotate-180' : ''}`} />
+                        <ChevronDown className={`w-3 h-3 text-gray-400 transition-transform flex-shrink-0 ${isRegionOpen ? 'rotate-180' : ''}`} />
                     </button>
 
                     {isRegionOpen && (
@@ -411,40 +432,39 @@ const Discovery: React.FC<DiscoveryProps> = ({ addLeads, openAiKey, setDiscovery
                 </div>
 
                 {/* City Input */}
-                <div className="md:col-span-4 lg:col-span-3 relative">
-                    <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
+                <div className="relative">
+                    <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4 pointer-events-none" />
                     <input
                     type="text"
-                    placeholder="Cidade / Bairro"
-                    className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-xl bg-transparent text-gray-900 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all"
+                    placeholder="Cidade"
+                    className="w-full pl-9 pr-4 py-3 border border-gray-200 rounded-xl bg-transparent text-gray-900 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all"
                     value={city}
                     onChange={(e) => setCity(e.target.value)}
                     />
                 </div>
+                </div>
               </div>
 
               {/* Row 2: Reputation Filter as Buttons */}
-              <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
-                  <div className="col-span-12">
-                      <label className="text-xs font-bold text-gray-500 uppercase mb-2 block flex items-center gap-1">
-                          <Star className="w-4 h-4 text-yellow-500" /> Reputação
-                      </label>
-                      <div className="flex flex-wrap gap-2">
-                          {RATING_OPTIONS.map((opt) => (
-                              <button
-                                  key={opt.value}
-                                  type="button"
-                                  onClick={() => setRatingFilter(opt.value)}
-                                  className={`px-4 py-2 rounded-lg text-xs font-medium border transition-all ${
-                                      ratingFilter === opt.value
-                                      ? 'bg-indigo-50 text-indigo-700 border-indigo-200 shadow-sm ring-1 ring-indigo-300'
-                                      : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
-                                  }`}
-                              >
-                                  {opt.label}
-                              </button>
-                          ))}
-                      </div>
+              <div>
+                  <label className="text-xs font-bold text-gray-500 uppercase mb-2 block flex items-center gap-1">
+                      <Star className="w-4 h-4 text-yellow-500" /> Reputação
+                  </label>
+                  <div className="flex flex-wrap gap-2">
+                      {RATING_OPTIONS.map((opt) => (
+                          <button
+                              key={opt.value}
+                              type="button"
+                              onClick={() => setRatingFilter(opt.value)}
+                              className={`px-4 py-2 rounded-lg text-xs font-medium border transition-all ${
+                                  ratingFilter === opt.value
+                                  ? 'bg-indigo-50 text-indigo-700 border-indigo-200 shadow-sm ring-1 ring-indigo-300'
+                                  : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
+                              }`}
+                          >
+                              {opt.label}
+                          </button>
+                      ))}
                   </div>
               </div>
 
@@ -473,7 +493,7 @@ const Discovery: React.FC<DiscoveryProps> = ({ addLeads, openAiKey, setDiscovery
                               ? 'bg-indigo-50 text-indigo-700 border-indigo-200' 
                               : 'bg-white text-gray-600 border-gray-200 hover:border-indigo-300'
                           }`}
-                      >
+                          >
                           Todas
                       </button>
                       {INDUSTRIES.map(ind => (
@@ -487,7 +507,10 @@ const Discovery: React.FC<DiscoveryProps> = ({ addLeads, openAiKey, setDiscovery
                                   : 'bg-white text-gray-600 border-gray-200 hover:border-indigo-300'
                               }`}
                           >
-                              {ind}
+                              <span className="flex items-center gap-1">
+                                {INDUSTRY_ICONS[ind] || <Building className="w-3 h-3" />}
+                                {ind}
+                              </span>
                           </button>
                       ))}
                   </div>
@@ -498,20 +521,88 @@ const Discovery: React.FC<DiscoveryProps> = ({ addLeads, openAiKey, setDiscovery
           </div>
 
           {results.length > 0 && (
-            <div className="flex-1 flex flex-col animate-fade-in">
-              <div className="flex justify-between items-center mb-4">
-                <h3 className="font-semibold text-gray-700">Resultados Encontrados ({results.length})</h3>
-                <button 
-                    onClick={handleImport}
-                    disabled={selectedIndices.length === 0}
-                    className="bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-300 disabled:text-gray-500 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
-                >
-                    <Download className="w-4 h-4" /> Importar ({selectedIndices.length})
-                </button>
+            <div className="flex-1 flex flex-col animate-fade-in xl:col-span-7">
+              <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 mb-4">
+                <div className="flex items-center gap-3 flex-wrap">
+                    <h3 className="font-semibold text-gray-700">Resultados ({results.length})</h3>
+                    <span className="text-xs text-gray-500">Selecionados: {selectedIndices.length}</span>
+                    <div className="flex items-center gap-2">
+                        <label className="flex items-center gap-1 text-xs text-gray-600">
+                            <input
+                              type="checkbox"
+                              checked={onlyContacts}
+                              onChange={() => setOnlyContacts(!onlyContacts)}
+                              className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                            />
+                            Somente com contato
+                        </label>
+                        <div className="relative text-xs text-gray-600">
+                            <button
+                              type="button"
+                              onClick={() => setIsSortOpen(!isSortOpen)}
+                              className="px-3 py-1.5 border border-gray-200 rounded-lg bg-white flex items-center gap-2 hover:border-indigo-300"
+                            >
+                              Ordenar por: <span className="font-semibold text-gray-800 capitalize">
+                                {sortBy === 'relevance' ? 'Relevância' : sortBy === 'rating' ? 'Reputação' : 'Valor'}
+                              </span>
+                              <ChevronDown className={`w-3 h-3 transition-transform ${isSortOpen ? 'rotate-180' : ''}`} />
+                            </button>
+                            {isSortOpen && (
+                              <div className="absolute z-20 mt-1 w-40 bg-white border border-gray-200 rounded-lg shadow-lg max-h-40 overflow-y-auto">
+                                {[
+                                  { id: 'relevance', label: 'Relevância' },
+                                  { id: 'rating', label: 'Reputação' },
+                                  { id: 'value', label: 'Valor estimado' }
+                                ].map(opt => (
+                                  <div
+                                    key={opt.id}
+                                    onClick={() => { setSortBy(opt.id as any); setIsSortOpen(false); }}
+                                    className={`px-3 py-2 cursor-pointer hover:bg-indigo-50 ${sortBy === opt.id ? 'text-indigo-700 font-semibold' : 'text-gray-700'}`}
+                                  >
+                                    {opt.label}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+                <div className="flex items-center gap-2 flex-wrap">
+                    <button
+                      onClick={() => setSelectedIndices((results || []).map((_, idx) => idx))}
+                      className="text-xs px-3 py-2 rounded-lg border border-gray-200 text-gray-700 hover:border-indigo-300"
+                    >
+                      Selecionar todos
+                    </button>
+                    <button
+                      onClick={() => setSelectedIndices([])}
+                      className="text-xs px-3 py-2 rounded-lg border border-gray-200 text-gray-700 hover:border-indigo-300"
+                    >
+                      Limpar seleção
+                    </button>
+                    <button 
+                        onClick={handleImport}
+                        disabled={selectedIndices.length === 0}
+                        className="bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-300 disabled:text-gray-500 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
+                    >
+                        <Download className="w-4 h-4" /> Importar ({selectedIndices.length})
+                    </button>
+                </div>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {results.map((lead, idx) => (
+                {results
+                  .map((lead, idx) => ({ lead, idx }))
+                  .filter(item => {
+                    if (!onlyContacts) return true;
+                    return isValid(item.lead.email) || isValid(item.lead.phone);
+                  })
+                  .sort((a, b) => {
+                    if (sortBy === 'rating') return (b.lead.rating || 0) - (a.lead.rating || 0);
+                    if (sortBy === 'value') return (b.lead.value || 0) - (a.lead.value || 0);
+                    return 0;
+                  })
+                  .map(({ lead, idx }) => (
                   <div 
                     key={idx} 
                     onClick={() => toggleSelection(idx)}
@@ -522,13 +613,11 @@ const Discovery: React.FC<DiscoveryProps> = ({ addLeads, openAiKey, setDiscovery
                     }`}
                   >
                     <div className="flex items-start justify-between mb-2">
-                        <div className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center text-xl">
-                            🏢
+                        <div className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center text-indigo-500">
+                            <Building className="w-6 h-6" />
                         </div>
                         {selectedIndices.includes(idx) && (
-                            <div className="text-indigo-600">
-                                <PlusCircle className="w-5 h-5 fill-indigo-100" />
-                            </div>
+                            <div className="w-4 h-4 rounded-full border-2 border-indigo-500"></div>
                         )}
                     </div>
                     <div className="mb-2">
@@ -538,19 +627,31 @@ const Discovery: React.FC<DiscoveryProps> = ({ addLeads, openAiKey, setDiscovery
                             <span className="text-[10px] text-gray-400 font-medium">
                                 {lead.rating ? lead.rating.toFixed(1) : ''}
                             </span>
-                        </div>
+                            {lead.value ? (
+                              <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100">
+                                ${lead.value.toLocaleString()}
+                              </span>
+                            ) : null}
+                         </div>
                     </div>
                     
-                    {isValid(lead.name) && (
+                    {(isValid(lead.name) || isValid(lead.contactRole)) && (
                         <p className="text-sm font-medium text-gray-700 flex items-center gap-2 mb-2">
                             <User className="w-4 h-4 text-indigo-600" />
                             {lead.name}
+                            {isValid(lead.contactRole) && <span className="text-xs text-gray-500">• {lead.contactRole}</span>}
                         </p>
                     )}
 
                     <p className="text-sm text-gray-500 flex items-center gap-1 mb-3">
                         <MapPin className="w-3 h-3" /> {isValid(lead.address) ? `${lead.address}, ${lead.city}` : lead.city}
                     </p>
+
+                    {isValid(lead.notes || lead.description) && (
+                      <p className="text-xs text-gray-600 mb-3 italic line-clamp-2">
+                        {lead.notes || lead.description}
+                      </p>
+                    )}
 
                     {(isValid(lead.website) || isValid(lead.linkedin) || isValid(lead.instagram) || isValid(lead.facebook)) ? (
                         <div className="flex gap-2 pt-3 border-t border-gray-100">
@@ -611,7 +712,7 @@ const Discovery: React.FC<DiscoveryProps> = ({ addLeads, openAiKey, setDiscovery
               </div>
             </div>
           )}
-        </>
+        </div>
       )}
 
       {activeTab === 'scraper' && (
@@ -763,7 +864,7 @@ const Discovery: React.FC<DiscoveryProps> = ({ addLeads, openAiKey, setDiscovery
       {activeTab === 'manual' && (
         <div className="max-w-3xl mx-auto w-full bg-white rounded-2xl shadow-sm border border-gray-200 p-8 animate-fade-in">
              <h3 className="font-bold text-xl text-gray-800 mb-6 flex items-center gap-2 pb-4 border-b border-gray-100">
-                <PlusCircle className="w-6 h-6 text-indigo-600" />
+                <PlusCircleIcon className="w-6 h-6 text-indigo-600" />
                 Cadastro Manual de Lead
             </h3>
             <form onSubmit={handleManualSubmit} className="space-y-6">
@@ -880,7 +981,7 @@ const Discovery: React.FC<DiscoveryProps> = ({ addLeads, openAiKey, setDiscovery
                         type="submit"
                         className="bg-indigo-600 hover:bg-indigo-700 text-white px-8 py-3 rounded-xl font-semibold shadow-lg shadow-indigo-100 transition-all flex items-center gap-2"
                     >
-                        <PlusCircle className="w-5 h-5" />
+                        <PlusCircleIcon className="w-5 h-5" />
                         Cadastrar Lead
                     </button>
                 </div>

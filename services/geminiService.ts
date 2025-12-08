@@ -4,9 +4,14 @@ import { Lead, PipelineStage } from '../types';
 import { isValidEmail, isValidPhone, formatPhone } from '../utils/validators';
 
 const getAI = () => {
-  const apiKey = process.env.API_KEY;
+  const apiKey =
+    import.meta.env.VITE_GEMINI_API_KEY ||
+    import.meta.env.GEMINI_API_KEY ||
+    process.env.GEMINI_API_KEY ||
+    process.env.API_KEY;
+
   if (!apiKey) {
-    throw new Error("API Key is missing. Please set the API_KEY environment variable.");
+    throw new Error("Gemini API Key is missing. Configure VITE_GEMINI_API_KEY (or GEMINI_API_KEY).");
   }
   return new GoogleGenAI({ apiKey });
 };

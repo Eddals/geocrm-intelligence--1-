@@ -1,15 +1,15 @@
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Lead, PipelineStage } from '../types';
 import { MapPin, Layers, Maximize2, Search, Loader2, User, Filter, ListOrdered, ChevronDown, Check, CheckCircle2 } from 'lucide-react';
-import { findNearbyPlaces } from '../services/geminiService';
-import { findNearbyPlacesWithOpenAI } from '../services/openaiService';
+import { findNearbyPlacesWithPerplexity } from '../services/perplexityService';
 
 interface LeadMapProps {
   leads: Lead[];
   discoveryResults?: Partial<Lead>[];
   openAiKey?: string;
   addLead?: (lead: Partial<Lead>) => void;
+  notify?: (msg: string, type?: 'success' | 'info' | 'warning') => void;
 }
 
 const INDUSTRIES = [
@@ -46,10 +46,11 @@ const LOCATIONS = {
     }
 };
 
-const LeadMap: React.FC<LeadMapProps> = ({ leads, discoveryResults = [], openAiKey, addLead }) => {
+const LeadMap: React.FC<LeadMapProps> = ({ leads, discoveryResults = [], openAiKey, addLead, notify }) => {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<any>(null);
   const markersRef = useRef<any[]>([]);
+  const heatLayerRef = useRef<any>(null);
   
   // Dropdown Refs
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -65,6 +66,9 @@ const LeadMap: React.FC<LeadMapProps> = ({ leads, discoveryResults = [], openAiK
   const [searchLimit, setSearchLimit] = useState<number | string>(5);
   const [isSearching, setIsSearching] = useState(false);
   const [aiPlaces, setAiPlaces] = useState<Partial<Lead>[]>([]);
+  const [routePlan, setRoutePlan] = useState<Partial<Lead>[]>([]);
+  const [proximityAlerts, setProximityAlerts] = useState<string[]>([]);
+  const [searchRadius, setSearchRadius] = useState<number>(2);
   
   // Location Filters
   const [country, setCountry] = useState<'BR' | 'US'>('BR');
@@ -74,10 +78,30 @@ const LeadMap: React.FC<LeadMapProps> = ({ leads, discoveryResults = [], openAiK
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [isCountryOpen, setIsCountryOpen] = useState(false);
   const [isRegionOpen, setIsRegionOpen] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<'all' | PipelineStage>('all');
+  const [minValue, setMinValue] = useState<number>(0);
+  const [tagFilter, setTagFilter] = useState<string>('');
+  const [showHeatmap, setShowHeatmap] = useState<boolean>(false);
 
   // Filter leads that have valid coordinates
-  const validLeads = leads.filter(l => l.lat !== 0 && l.lng !== 0);
-  const allMapPoints = [...validLeads, ...discoveryResults, ...aiPlaces];
+  const validLeads = useMemo(() => leads.filter(l => l.lat !== 0 && l.lng !== 0), [leads]);
+  const allMapPoints = useMemo(
+    () => [...validLeads, ...discoveryResults, ...aiPlaces],
+    [validLeads, discoveryResults, aiPlaces]
+  );
+  const filteredPoints = useMemo(() => {
+    return allMapPoints.filter((lead) => {
+      if (!lead.lat || !lead.lng) return false;
+      if (statusFilter !== 'all' && lead.id && lead.status !== statusFilter) return false;
+      if (minValue > 0 && lead.id && (lead.value || 0) < minValue) return false;
+      if (tagFilter && lead.tags && lead.tags.length > 0) {
+        const match = lead.tags.some((t) => t.toLowerCase().includes(tagFilter.toLowerCase()));
+        if (!match) return false;
+      }
+      return true;
+    });
+  }, [allMapPoints, statusFilter, minValue, tagFilter]);
+  const filteredRealLeads = useMemo(() => filteredPoints.filter(p => p.id), [filteredPoints]);
 
   const getMarkerColor = (lead: Partial<Lead>) => {
     // If it's a "Ghost" lead (from AI search or Discovery)
@@ -113,11 +137,14 @@ const LeadMap: React.FC<LeadMapProps> = ({ leads, discoveryResults = [], openAiK
     addTileLayer(map, 'street');
 
     // Force resize calculation after mount
-    setTimeout(() => {
-        map.invalidateSize();
+    const resizeTimer = setTimeout(() => {
+        if (mapInstanceRef.current) {
+            mapInstanceRef.current.invalidateSize();
+        }
     }, 100);
 
     return () => {
+      clearTimeout(resizeTimer);
       map.remove();
       mapInstanceRef.current = null;
     };
@@ -166,27 +193,61 @@ const LeadMap: React.FC<LeadMapProps> = ({ leads, discoveryResults = [], openAiK
     // Clear existing markers
     markersRef.current.forEach(marker => map.removeLayer(marker));
     markersRef.current = [];
+    if (heatLayerRef.current) {
+        map.removeLayer(heatLayerRef.current);
+        heatLayerRef.current = null;
+    }
 
     const bounds = L.latLngBounds();
+    const proximityMsgs: string[] = [];
+    const heatPoints: [number, number, number][] = [];
 
-    allMapPoints.forEach(lead => {
+    const distanceKm = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+        const toRad = (v: number) => (v * Math.PI) / 180;
+        const R = 6371;
+        const dLat = toRad(lat2 - lat1);
+        const dLon = toRad(lon2 - lon1);
+        const a =
+            Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+            Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
+            Math.sin(dLon / 2) * Math.sin(dLon / 2);
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        return R * c;
+    };
+
+    const leadScoreRadius = (lead: Partial<Lead>) => {
+        const base = 24;
+        const val = lead.value || 0;
+        const bonus = Math.min(18, val / 1000);
+        return isNaN(bonus) ? base : base + bonus;
+    };
+
+    filteredPoints.forEach(lead => {
         if(!lead.lat || !lead.lng) return;
 
         const color = getMarkerColor(lead);
         const isGhost = !lead.id; // Not in CRM yet
+        const radius = leadScoreRadius(lead);
         
-        // Create custom CSS icon
+        // Create custom CSS icon with halo proportional ao valor
         let iconHtml;
         if (isGhost) {
              iconHtml = `
-            <div style="background-color: ${color}90; width: 20px; height: 20px; border-radius: 50%; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 5px rgba(0,0,0,0.3); border: 2px solid white;">
-                <div style="width: 6px; height: 6px; background: white; border-radius: 50%;"></div>
+            <div style="position: relative;">
+              <div style="position:absolute; inset:-6px; background-color:${color}40; border-radius:50%; filter:blur(4px);"></div>
+              <div style="position:absolute; inset:-3px; background-color:${color}70; border-radius:50%;"></div>
+              <div style="background-color: ${color}; width: 20px; height: 20px; border-radius: 50%; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 5px rgba(0,0,0,0.3); border: 2px solid white;">
+                  <div style="width: 6px; height: 6px; background: white; border-radius: 50%;"></div>
+              </div>
             </div>
         `;
         } else {
             iconHtml = `
-            <div style="background-color: ${color}; width: 24px; height: 24px; border-radius: 50% 50% 50% 0; transform: rotate(-45deg); display: flex; align-items: center; justify-content: center; box-shadow: 2px 2px 5px rgba(0,0,0,0.3); border: 2px solid white;">
-                <div style="width: 8px; height: 8px; background: white; border-radius: 50%; transform: rotate(45deg);"></div>
+            <div style="position: relative; transform: rotate(-45deg);">
+              <div style="position:absolute; inset:-10px; background-color:${color}30; border-radius:50%; filter:blur(6px);"></div>
+              <div style="background-color: ${color}; width: ${radius}px; height: ${radius}px; border-radius: 50% 50% 50% 0; display: flex; align-items: center; justify-content: center; box-shadow: 2px 2px 5px rgba(0,0,0,0.3); border: 2px solid white;">
+                  <div style="width: 8px; height: 8px; background: white; border-radius: 50%; transform: rotate(45deg);"></div>
+              </div>
             </div>
         `;
         }
@@ -194,8 +255,8 @@ const LeadMap: React.FC<LeadMapProps> = ({ leads, discoveryResults = [], openAiK
         const customIcon = L.divIcon({
             className: 'custom-pin',
             html: iconHtml,
-            iconSize: isGhost ? [20, 20] : [30, 42],
-            iconAnchor: isGhost ? [10, 10] : [15, 42],
+            iconSize: isGhost ? [26, 26] : [radius, radius + 18],
+            iconAnchor: isGhost ? [13, 13] : [radius / 2, radius],
             popupAnchor: isGhost ? [0, -10] : [0, -35]
         });
 
@@ -203,7 +264,7 @@ const LeadMap: React.FC<LeadMapProps> = ({ leads, discoveryResults = [], openAiK
             return val && val !== 'null' && val !== 'undefined' && val !== '';
         };
 
-        // HTML Content for Popup (Simplified - No Images, No Mapillary)
+        // HTML Content for Popup (Simplified)
         const popupContent = `
             <div style="font-family: 'Inter', sans-serif; min-width: 250px; max-width: 280px;">
                 <div style="padding: 4px;">
@@ -264,7 +325,7 @@ const LeadMap: React.FC<LeadMapProps> = ({ leads, discoveryResults = [], openAiK
                     ${!isGhost ? `
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 8px; padding-top: 8px; border-top: 1px solid #f3f4f6;">
                         <span style="background: ${color}20; color: ${color}; font-size: 10px; padding: 2px 6px; border-radius: 4px; font-weight: 600;">${lead.status}</span>
-                        <span style="font-weight: 700; color: #059669; font-size: 12px;">$ ${(lead.value || 0).toLocaleString()}</span>
+                        <span style="font-weight: 700; color: #059669; font-size: 12px;">R$ ${(lead.value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                     </div>
                     ` : `
                     <div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid #f3f4f6;">
@@ -302,10 +363,49 @@ const LeadMap: React.FC<LeadMapProps> = ({ leads, discoveryResults = [], openAiK
         });
 
         markersRef.current.push(marker);
-        bounds.extend([lead.lat, lead.lng]);
+        if (Number.isFinite(lead.lat) && Number.isFinite(lead.lng)) {
+            bounds.extend([lead.lat, lead.lng]);
+            if (!Number.isNaN(lead.lat) && !Number.isNaN(lead.lng)) {
+                heatPoints.push([lead.lat, lead.lng, Math.max(0.5, (lead.value || 1000) / 20000)]);
+            }
+        }
     });
 
-  }, [leads, discoveryResults, aiPlaces]);
+    // Proximidade: leads próximos de oportunidades
+    const ghosts = filteredPoints.filter(l => !l.id && l.lat && l.lng);
+    const real = filteredPoints.filter(l => l.id && l.lat && l.lng);
+    ghosts.forEach(g => {
+        real.forEach(r => {
+            if (g.lat && g.lng && r.lat && r.lng) {
+                const d = distanceKm(g.lat, g.lng, r.lat, r.lng);
+                if (d <= searchRadius) {
+                    proximityMsgs.push(`${g.company || 'Oportunidade'} a ${d.toFixed(1)} km de ${r.company}`);
+                }
+            }
+        });
+    });
+    setProximityAlerts(proximityMsgs.slice(0, 6));
+
+    // Heat layer com círculos suaves
+    if (showHeatmap && heatPoints.length > 0) {
+        const heatGroup = L.layerGroup();
+        heatPoints.forEach(([lat, lng, weight]) => {
+            L.circle([lat, lng], {
+                radius: 250 * weight,
+                color: '#6366f1',
+                weight: 0,
+                fillColor: '#6366f1',
+                fillOpacity: 0.25
+            }).addTo(heatGroup);
+        });
+        heatGroup.addTo(map);
+        heatLayerRef.current = heatGroup;
+    }
+
+    if (!bounds.isValid()) return;
+    map.fitBounds(bounds, { padding: [60, 60] });
+
+  }, [filteredPoints, addLead, searchRadius, showHeatmap]);
 
   const addTileLayer = (map: any, type: 'street' | 'satellite') => {
       const L = (window as any).L;
@@ -348,53 +448,64 @@ const LeadMap: React.FC<LeadMapProps> = ({ leads, discoveryResults = [], openAiK
           const nominatimRes = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(fullQuery)}`);
           const geoData = await nominatimRes.json();
 
+          let latitude: number | null = null;
+          let longitude: number | null = null;
+          let displayName = '';
+
           if (geoData && geoData.length > 0) {
               const { lat, lon, display_name } = geoData[0];
-              const latitude = parseFloat(lat);
-              const longitude = parseFloat(lon);
-
-              // Fly to location
-              if (mapInstanceRef.current) {
-                  mapInstanceRef.current.flyTo([latitude, longitude], 16, { duration: 2 });
-              }
-
-              // 2. Ask AI to find businesses nearby this coordinate
-              let newPlaces = [];
-              const limit = typeof searchLimit === 'number' ? searchLimit : parseInt(searchLimit) || 5;
-              if (openAiKey) {
-                   newPlaces = await findNearbyPlacesWithOpenAI(latitude, longitude, display_name, openAiKey, searchIndustry, limit);
-              } else {
-                   newPlaces = await findNearbyPlaces(latitude, longitude, display_name, searchIndustry, limit);
-              }
-              
-              setAiPlaces(newPlaces);
-              
-              // 3. AUTO FIT BOUNDS to show all new pins
-              if (newPlaces.length > 0 && mapInstanceRef.current) {
-                  const L = (window as any).L;
-                  const bounds = L.latLngBounds();
-                  
-                  // Add center point
-                  bounds.extend([latitude, longitude]);
-                  
-                  // Add all found places
-                  newPlaces.forEach(p => {
-                      if (p.lat && p.lng) bounds.extend([p.lat, p.lng]);
-                  });
-                  
-                  // Delay slightly to allow map to finish flying to center first, or interrupt it
-                  setTimeout(() => {
-                    mapInstanceRef.current.fitBounds(bounds, { padding: [80, 80], maxZoom: 17, animate: true, duration: 1.5 });
-                  }, 500);
-              }
-
+              latitude = parseFloat(lat);
+              longitude = parseFloat(lon);
+              displayName = display_name;
+          } else if (mapInstanceRef.current) {
+              const center = mapInstanceRef.current.getCenter();
+              latitude = center?.lat || null;
+              longitude = center?.lng || null;
+              displayName = `${searchQuery || 'Área selecionada'}, ${region || ''} ${countryName}`;
+              notify?.("Local não encontrado pelo geocoding. Buscando pela região exibida no mapa.", 'info');
           } else {
-              alert("Local não encontrado. Tente ser mais específico.");
+              displayName = `${searchQuery || 'Região alvo'}, ${region || ''} ${countryName}`;
+              latitude = 0;
+              longitude = 0;
+              notify?.("Local não encontrado. Tentando busca sem coordenadas precisas.", 'info');
+          }
+
+          // 2. Ask AI to find businesses nearby this coordinate (or fallback)
+          const limit = typeof searchLimit === 'number' ? searchLimit : parseInt(searchLimit) || 5;
+          const newPlaces = await findNearbyPlacesWithPerplexity(
+              latitude || 0,
+              longitude || 0,
+              displayName,
+              searchIndustry,
+              limit,
+              searchQuery,
+              country,
+              region
+          );
+          
+          setAiPlaces(newPlaces);
+          
+          // 3. AUTO FIT BOUNDS to show all new pins
+          if (newPlaces.length > 0 && mapInstanceRef.current) {
+              const L = (window as any).L;
+              const bounds = L.latLngBounds();
+              
+              bounds.extend([latitude || 0, longitude || 0]);
+              
+              newPlaces.forEach(p => {
+                  if (p.lat && p.lng) bounds.extend([p.lat, p.lng]);
+              });
+              
+              setTimeout(() => {
+                mapInstanceRef.current.fitBounds(bounds, { padding: [80, 80], maxZoom: 17, animate: true, duration: 1.5 });
+              }, 500);
+          } else if (newPlaces.length === 0) {
+              notify?.("Nenhum resultado encontrado. Tente especificar melhor o local ou nicho.", 'warning');
           }
 
       } catch (error) {
           if (error instanceof Error) {
-              alert(`Erro: ${error.message}`);
+              notify?.(`Erro: ${error.message}`, 'warning');
           } else {
               console.error("Map search error", error);
           }
@@ -422,8 +533,66 @@ const LeadMap: React.FC<LeadMapProps> = ({ leads, discoveryResults = [], openAiK
       }
   };
 
+  const handleRadiusSearch = async () => {
+      if (!selectedLead || !selectedLead.lat || !selectedLead.lng) {
+          notify?.("Selecione um lead no mapa para buscar ao redor.", 'warning');
+          return;
+      }
+      setIsSearching(true);
+      try {
+          const centerName = `${selectedLead.company || selectedLead.address || 'Ponto selecionado'}`;
+          const limit = typeof searchLimit === 'number' ? searchLimit : parseInt(searchLimit) || 5;
+          const results = await findNearbyPlacesWithPerplexity(
+            selectedLead.lat,
+            selectedLead.lng,
+            centerName,
+            searchIndustry,
+            limit,
+            searchQuery,
+            country,
+            region
+          );
+          setAiPlaces(results);
+
+          if (results.length > 0 && mapInstanceRef.current) {
+              const L = (window as any).L;
+              const bounds = L.latLngBounds();
+              bounds.extend([selectedLead.lat, selectedLead.lng]);
+              results.forEach(p => p.lat && p.lng && bounds.extend([p.lat, p.lng]));
+              mapInstanceRef.current.fitBounds(bounds, { padding: [80, 80], maxZoom: 16 });
+          }
+      } catch (e: any) {
+          notify?.(`Erro na busca por raio: ${e.message || e}`, 'warning');
+      } finally {
+          setIsSearching(false);
+      }
+  };
+
+  const buildRoutePlan = () => {
+      const anchor = selectedLead && selectedLead.lat && selectedLead.lng
+        ? selectedLead
+        : filteredPoints.find(p => p.lat && p.lng);
+      if (!anchor || !anchor.lat || !anchor.lng) {
+        notify?.('Nenhum ponto com coordenadas para montar roteiro.', 'warning');
+        return;
+      }
+
+      const dist = (a: Partial<Lead>) => {
+        if (!a.lat || !a.lng) return Infinity;
+        const dx = a.lat - anchor.lat;
+        const dy = a.lng - anchor.lng;
+        return Math.sqrt(dx*dx + dy*dy);
+      };
+
+      const sorted = [...filteredPoints]
+        .filter(p => p.lat && p.lng)
+        .sort((a, b) => dist(a) - dist(b))
+        .slice(0, 12);
+      setRoutePlan(sorted);
+  };
+
   return (
-    <div className="h-full flex flex-col space-y-4 relative">
+    <div className="h-full flex flex-col space-y-4 relative overflow-hidden">
        <div className="flex justify-between items-start">
         <div>
             <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
@@ -450,7 +619,87 @@ const LeadMap: React.FC<LeadMapProps> = ({ leads, discoveryResults = [], openAiK
         </div>
       </div>
 
-      <div className="flex-1 flex gap-4 h-full min-h-[500px] relative">
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-3">
+        <div className="col-span-2 bg-white border border-gray-200 rounded-xl p-3 shadow-sm flex flex-wrap gap-2 items-center">
+          <span className="text-xs font-bold text-gray-500 uppercase">Filtros rápidos</span>
+          <div className="flex gap-1">
+            {(['all', PipelineStage.NEW, PipelineStage.CONTACT, PipelineStage.QUALIFIED, PipelineStage.CLOSED] as const).map(st => (
+              <button
+                key={st}
+                onClick={() => setStatusFilter(st)}
+                className={`px-2.5 py-1 rounded-lg text-xs font-semibold border transition-colors ${
+                  statusFilter === st
+                    ? 'bg-indigo-50 text-indigo-700 border-indigo-200'
+                    : 'bg-white text-gray-600 border-gray-200 hover:border-indigo-200'
+                }`}
+              >
+                {st === 'all' ? 'Todos' : st}
+              </button>
+            ))}
+          </div>
+          <div className="flex items-center gap-2 ml-auto">
+            <label className="text-[11px] text-gray-500 uppercase font-semibold">Valor mín.</label>
+            <input
+              type="number"
+              value={minValue}
+              onChange={(e) => setMinValue(Number(e.target.value) || 0)}
+              className="w-24 px-2 py-1.5 text-sm border border-gray-200 rounded-lg focus:ring-1 focus:ring-indigo-500"
+            />
+            <input
+              type="text"
+              value={tagFilter}
+              onChange={(e) => setTagFilter(e.target.value)}
+              placeholder="Tag/Setor"
+              className="w-32 px-2 py-1.5 text-sm border border-gray-200 rounded-lg focus:ring-1 focus:ring-indigo-500"
+            />
+          </div>
+        </div>
+        <div className="bg-white border border-gray-200 rounded-xl p-3 shadow-sm flex items-center gap-3">
+          <label className="flex items-center gap-2 text-sm text-gray-700">
+            <input
+              type="checkbox"
+              checked={showHeatmap}
+              onChange={() => setShowHeatmap(!showHeatmap)}
+              className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+            />
+            Heatmap / densidade
+          </label>
+          <div className="flex items-center gap-2 ml-auto">
+            <input
+              type="number"
+              min={1}
+              value={searchRadius}
+              onChange={(e) => setSearchRadius(Number(e.target.value) || 1)}
+              className="w-14 px-2 py-1 text-xs border border-gray-200 rounded-lg focus:ring-1 focus:ring-indigo-500"
+              title="Raio em km"
+            />
+            <button
+              onClick={handleRadiusSearch}
+              disabled={isSearching}
+              className="px-3 py-1.5 text-xs font-semibold bg-amber-500 text-white rounded-lg hover:bg-amber-600 transition disabled:opacity-60 flex items-center gap-1"
+            >
+              Raio {searchRadius} km
+            </button>
+            <button
+              onClick={buildRoutePlan}
+              className="px-3 py-1.5 text-xs font-semibold bg-gray-900 text-white rounded-lg hover:bg-black transition"
+            >
+              Gerar roteiro
+            </button>
+          </div>
+        </div>
+        <div className="bg-white border border-gray-200 rounded-xl p-3 shadow-sm text-xs text-gray-700">
+          <p className="font-bold text-gray-800 mb-1">Alertas de proximidade</p>
+          {proximityAlerts.length === 0 && <p className="text-gray-400">Nenhum alerta ativo.</p>}
+          {proximityAlerts.map((msg, idx) => (
+            <p key={idx} className="flex items-start gap-1 text-[11px] text-gray-600">
+              <span className="text-emerald-500 mt-0.5">•</span>{msg}
+            </p>
+          ))}
+        </div>
+      </div>
+
+      <div className="flex-1 flex gap-4 h-full min-h-0 relative">
           
           {/* Smart Search Bar Overlay - Centered */}
           <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[400] w-full max-w-5xl flex flex-col gap-2 px-4">
@@ -519,13 +768,13 @@ const LeadMap: React.FC<LeadMapProps> = ({ leads, discoveryResults = [], openAiK
                   </div>
                   
                   {/* Custom Industry Dropdown */}
-                  <div className="relative w-48 shrink-0 hidden md:block" ref={dropdownRef}>
+                  <div className="relative w-60 shrink-0" ref={dropdownRef}>
                       <button
                           type="button"
                           onClick={() => setIsDropdownOpen(!isDropdownOpen)}
                           className="w-full px-3 py-2.5 rounded-lg border border-gray-200 bg-white text-sm text-gray-700 flex justify-between items-center hover:bg-gray-50 focus:ring-2 focus:ring-indigo-500 outline-none"
                       >
-                          <span className="truncate text-xs">{searchIndustry || "Todas Indústrias"}</span>
+                          <span className="truncate text-xs">{searchIndustry || "Nicho (ex: Clínicas de Estética, Restaurantes Japoneses)"}</span>
                           <ChevronDown className={`w-3 h-3 text-gray-400 transition-transform ${isDropdownOpen ? 'rotate-180' : ''}`} />
                       </button>
                       
@@ -536,7 +785,7 @@ const LeadMap: React.FC<LeadMapProps> = ({ leads, discoveryResults = [], openAiK
                                   onClick={() => { setSearchIndustry(''); setIsDropdownOpen(false); }}
                                   className={`w-full text-left px-3 py-2 text-xs hover:bg-indigo-50 flex items-center justify-between ${searchIndustry === '' ? 'text-indigo-600 font-medium bg-indigo-50' : 'text-gray-700'}`}
                               >
-                                  Todas Indústrias
+                                  Nicho (ex: Clínicas de Estética, Restaurantes Japoneses)
                                   {searchIndustry === '' && <Check className="w-3 h-3" />}
                               </button>
                               {INDUSTRIES.map(ind => (
@@ -611,15 +860,32 @@ const LeadMap: React.FC<LeadMapProps> = ({ leads, discoveryResults = [], openAiK
                     </div>
                 </div>
              </div>
+
+             {routePlan.length > 0 && (
+                <div className="absolute bottom-6 left-6 bg-white/95 backdrop-blur-md p-4 rounded-xl shadow-lg border border-gray-100 z-[400] w-64">
+                    <h4 className="text-sm font-bold text-gray-800 mb-2">Roteiro sugerido</h4>
+                    <div className="space-y-2 max-h-48 overflow-y-auto custom-scrollbar">
+                        {routePlan.map((p, idx) => (
+                            <div key={idx} className="flex items-start gap-2 text-xs text-gray-700">
+                                <span className="w-5 h-5 rounded-full bg-indigo-600 text-white flex items-center justify-center text-[11px]">{idx+1}</span>
+                                <div>
+                                    <p className="font-semibold leading-tight">{p.company}</p>
+                                    <p className="text-[11px] text-gray-500">{p.city}</p>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+             )}
           </div>
 
           {/* Sidebar List Overlay (Desktop) */}
           <div className="w-80 bg-white rounded-xl shadow-sm border border-gray-200 flex flex-col overflow-hidden hidden lg:flex">
               <div className="p-4 border-b border-gray-100 bg-gray-50">
-                  <h3 className="font-bold text-gray-700">Leads no Mapa ({validLeads.length})</h3>
+                  <h3 className="font-bold text-gray-700">Leads no Mapa ({filteredRealLeads.length})</h3>
               </div>
               <div className="flex-1 overflow-y-auto p-2 space-y-2 custom-scrollbar">
-                  {validLeads.map(lead => (
+                  {filteredRealLeads.map(lead => (
                       <div 
                         key={lead.id}
                         onClick={() => {
@@ -644,7 +910,7 @@ const LeadMap: React.FC<LeadMapProps> = ({ leads, discoveryResults = [], openAiK
                               <MapPin className="w-3 h-3" /> {lead.city}
                           </div>
                           <div className="flex justify-between items-center pt-2 border-t border-gray-50">
-                              <span className="text-xs font-bold text-emerald-600">$ {lead.value?.toLocaleString()}</span>
+                              <span className="text-xs font-bold text-emerald-600">R$ {lead.value?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                               {lead.contactRole && (
                                   <span className="text-[10px] text-indigo-600 flex items-center gap-1">
                                       <User className="w-3 h-3" /> {lead.contactRole}
@@ -653,7 +919,7 @@ const LeadMap: React.FC<LeadMapProps> = ({ leads, discoveryResults = [], openAiK
                           </div>
                       </div>
                   ))}
-                  {validLeads.length === 0 && (
+                  {filteredRealLeads.length === 0 && (
                       <div className="p-4 text-center text-gray-400 text-xs">
                           Nenhum lead com localização válida.
                       </div>

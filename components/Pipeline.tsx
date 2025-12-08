@@ -3,7 +3,8 @@ import React, { useState } from 'react';
 import { PipelineStage, Lead } from '../types';
 import { rankLeadsForEmailCampaign } from '../services/geminiService';
 import { rankLeadsForEmailCampaign as rankLeadsOpenAI } from '../services/openaiService';
-import { MoreHorizontal, Plus, Phone, Mail, MapPin, Edit, Trash2, ArrowRightCircle, Download, Save, X, Building, User, DollarSign, Bot, Target, MessageSquare, Send, Sparkles, Loader2, ChevronDown, ChevronUp, FileText, Clock, FileClock, AlertTriangle, AlertOctagon } from 'lucide-react';
+import { generateWhatsappMessage } from '../services/perplexityService';
+import { MoreHorizontal, Plus, Phone, Mail, MapPin, Edit, Trash2, ArrowRightCircle, Download, Save, X, Building, User, DollarSign, Bot, Target, MessageSquare, Send, Sparkles, Loader2, ChevronDown, ChevronUp, FileText, Clock, FileClock, AlertTriangle, AlertOctagon, Briefcase, MessageCircle } from 'lucide-react';
 
 interface PipelineProps {
   leads: Lead[];
@@ -12,11 +13,18 @@ interface PipelineProps {
   enrichLead: (id: string) => void;
   deleteLead: (id: string) => void;
   addNewLead: (lead: Partial<Lead>) => void;
+  settings: AppSettings;
   openAiKey?: string;
+  notify?: (msg: string, type?: 'success' | 'info' | 'warning') => void;
 }
 
-const Pipeline: React.FC<PipelineProps> = ({ leads, updateLeadStatus, updateLead, enrichLead, deleteLead, addNewLead, openAiKey }) => {
+const Pipeline: React.FC<PipelineProps> = ({ leads, updateLeadStatus, updateLead, enrichLead, deleteLead, addNewLead, settings, openAiKey, notify }) => {
   const stages = Object.values(PipelineStage);
+  const WIP_LIMITS: Partial<Record<PipelineStage, number>> = {
+    [PipelineStage.CONTACT]: 6,
+    [PipelineStage.ANALYSIS]: 8,
+    [PipelineStage.WAITING]: 6
+  };
   const [draggedLeadId, setDraggedLeadId] = useState<string | null>(null);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [expandedLeadId, setExpandedLeadId] = useState<string | null>(null);
@@ -33,6 +41,11 @@ const Pipeline: React.FC<PipelineProps> = ({ leads, updateLeadStatus, updateLead
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [recommendedLeads, setRecommendedLeads] = useState<{lead: Lead, reason: string}[]>([]);
   const [emailSentSuccess, setEmailSentSuccess] = useState(false);
+  const [whatsLead, setWhatsLead] = useState<Lead | null>(null);
+  const [whatsLang, setWhatsLang] = useState<'pt' | 'en'>('pt');
+  const [whatsTone, setWhatsTone] = useState<'consultivo' | 'direto' | 'amigavel' | 'urgente'>('consultivo');
+  const [whatsMessage, setWhatsMessage] = useState('');
+  const [isGeneratingWhats, setIsGeneratingWhats] = useState(false);
 
   // Create Modal State
   const [isCreating, setIsCreating] = useState(false);
@@ -41,10 +54,23 @@ const Pipeline: React.FC<PipelineProps> = ({ leads, updateLeadStatus, updateLead
       name: '',
       email: '',
       phone: '',
-      value: 0,
+      value: undefined,
       city: '',
-      status: PipelineStage.NEW
+      status: PipelineStage.NEW,
+      contactRole: '',
+      tags: []
   });
+  const [isIndustryOpen, setIsIndustryOpen] = useState(false);
+
+  const INDUSTRY_OPTIONS = [
+    "Construção",
+    "Limpeza Comercial",
+    "Agência / Marketing",
+    "Tecnologia / SaaS",
+    "Saúde e Clínicas",
+    "Imobiliário",
+    "Educação"
+  ];
 
   // Helper to prevent showing "null" string
   const hasData = (val: string | null | undefined) => {
@@ -85,10 +111,16 @@ const Pipeline: React.FC<PipelineProps> = ({ leads, updateLeadStatus, updateLead
 
   const handleDrop = (e: React.DragEvent, stage: PipelineStage) => {
     e.preventDefault();
-    if (draggedLeadId) {
-      updateLeadStatus(draggedLeadId, stage);
-      setDraggedLeadId(null);
+    if (!draggedLeadId) return;
+
+    const stageCount = leads.filter(l => l.status === stage).length;
+    const limit = WIP_LIMITS[stage] || Infinity;
+    if (stageCount >= limit) {
+        notify?.(`Limite de WIP atingido em ${stage}. Conclua ou mova leads antes de adicionar mais.`, 'warning');
+        return;
     }
+    updateLeadStatus(draggedLeadId, stage);
+    setDraggedLeadId(null);
   };
 
   const toggleExpand = (id: string, e: React.MouseEvent) => {
@@ -222,6 +254,60 @@ const Pipeline: React.FC<PipelineProps> = ({ leads, updateLeadStatus, updateLead
       setOpenMenuId(null);
   };
 
+  const openWhatsModal = async (lead: Lead) => {
+      if (!lead.phone) return;
+      setWhatsLead(lead);
+      setWhatsMessage('');
+      setIsGeneratingWhats(true);
+      setWhatsLang('pt');
+      setWhatsTone('consultivo');
+      try {
+          const msg = await generateWhatsappMessage(lead, settings, 'pt', 'consultivo');
+          setWhatsMessage(msg);
+      } catch (e: any) {
+          notify?.(`Erro ao gerar mensagem: ${e.message || e}`, 'warning');
+      } finally {
+          setIsGeneratingWhats(false);
+      }
+  };
+
+  const regenerateWhats = async (lang: 'pt' | 'en', tone?: 'consultivo' | 'direto' | 'amigavel' | 'urgente') => {
+      if (!whatsLead) return;
+      setIsGeneratingWhats(true);
+      setWhatsLang(lang);
+      if (tone) setWhatsTone(tone);
+      try {
+          const msg = await generateWhatsappMessage(whatsLead, settings, lang, tone || whatsTone);
+          setWhatsMessage(msg);
+      } catch (e: any) {
+          notify?.(`Erro ao gerar mensagem: ${e.message || e}`, 'warning');
+      } finally {
+          setIsGeneratingWhats(false);
+      }
+  };
+
+  const sendWhatsApp = () => {
+      if (!whatsLead || !whatsLead.phone || !whatsMessage) return;
+      const digits = (whatsLead.phone || '').replace(/\D/g, '');
+      const url = `https://wa.me/${digits}?text=${encodeURIComponent(whatsMessage)}`;
+      window.open(url, '_blank');
+  };
+
+  const openLeadInMaps = (lead: Lead) => {
+      if (lead.mapsUri) {
+          window.open(lead.mapsUri, '_blank');
+          return;
+      }
+      if (lead.lat && lead.lng) {
+          window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${lead.lat},${lead.lng}`)}`, '_blank');
+          return;
+      }
+      const query = lead.company || lead.name || lead.address;
+      if (query) {
+          window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${query} ${lead.address || ''}`)}`, '_blank');
+      }
+  };
+
   const handleNoteChange = (id: string, newNote: string) => {
       // Update local state is handled by the textarea default behavior,
       // we just need to save it to the app state on blur.
@@ -231,7 +317,7 @@ const Pipeline: React.FC<PipelineProps> = ({ leads, updateLeadStatus, updateLead
   // --- Create Logic ---
 
   const handleCreateChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-      const value = e.target.type === 'number' ? Number(e.target.value) : e.target.value;
+      const value = e.target.type === 'number' ? (e.target.value === '' ? undefined : Number(e.target.value)) : e.target.value;
       setCreateForm({ ...createForm, [e.target.name]: value });
        // Clear error when user types
        if (errors[e.target.name]) {
@@ -246,7 +332,7 @@ const Pipeline: React.FC<PipelineProps> = ({ leads, updateLeadStatus, updateLead
           return;
       }
 
-      addNewLead(createForm);
+      addNewLead({ ...createForm, value: createForm.value ?? 0 });
       setIsCreating(false);
       setErrors({});
       setCreateForm({
@@ -254,10 +340,13 @@ const Pipeline: React.FC<PipelineProps> = ({ leads, updateLeadStatus, updateLead
           name: '',
           email: '',
           phone: '',
-          value: 0,
+          value: undefined,
           city: '',
-          status: PipelineStage.NEW
+          status: PipelineStage.NEW,
+          contactRole: '',
+          tags: []
       });
+      setIsIndustryOpen(false);
   };
 
 
@@ -279,6 +368,18 @@ const Pipeline: React.FC<PipelineProps> = ({ leads, updateLeadStatus, updateLead
           default: return 'hidden';
       }
   };
+
+  const getRiskFlags = (lead: Lead) => {
+      const now = new Date().getTime();
+      const lastTouch = lead.lastContact ? new Date(lead.lastContact).getTime() : new Date(lead.createdAt).getTime();
+      const days = Math.floor((now - lastTouch) / (1000 * 60 * 60 * 24));
+      const stale = days >= 7;
+      const noOwner = !hasData(lead.contactRole);
+      const noContact = !hasData(lead.email) && !hasData(lead.phone);
+      return { stale, noOwner, noContact, days };
+  };
+
+  const priorityRank = (p?: string) => p === 'High' ? 3 : p === 'Medium' ? 2 : p === 'Low' ? 1 : 0;
 
   return (
     <div className="flex flex-col min-h-full">
@@ -306,7 +407,9 @@ const Pipeline: React.FC<PipelineProps> = ({ leads, updateLeadStatus, updateLead
         {/* Changed from overflow-x-auto flex to Grid for multi-row layout */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 pb-10">
             {stages.map((stage) => {
-            const stageLeads = leads.filter(l => l.status === stage);
+            const stageLeads = leads
+              .filter(l => l.status === stage)
+              .sort((a, b) => priorityRank(b.leadPriority) - priorityRank(a.leadPriority) || b.value - a.value);
             
             return (
                 <div 
@@ -321,9 +424,16 @@ const Pipeline: React.FC<PipelineProps> = ({ leads, updateLeadStatus, updateLead
                             <span className={`w-1.5 h-1.5 rounded-full ${stage === PipelineStage.CLOSED ? 'bg-emerald-500' : 'bg-indigo-500'}`}></span>
                             <h3 className="font-semibold text-gray-700 text-xs uppercase tracking-wide">{stage}</h3>
                         </div>
-                        <span className="text-[10px] font-bold bg-white px-1.5 py-0.5 rounded text-gray-500 shadow-sm border border-gray-100">
-                            {stageLeads.length}
-                        </span>
+                        <div className="flex items-center gap-1">
+                          <span className="text-[10px] font-bold bg-white px-1.5 py-0.5 rounded text-gray-500 shadow-sm border border-gray-100">
+                              {stageLeads.length}
+                          </span>
+                          {WIP_LIMITS[stage] && (
+                            <span className="text-[9px] text-amber-600 bg-amber-50 border border-amber-100 rounded px-1">
+                                WIP {stageLeads.length}/{WIP_LIMITS[stage]}
+                            </span>
+                          )}
+                        </div>
                     </div>
 
                     {/* Drop Zone / List */}
@@ -345,7 +455,14 @@ const Pipeline: React.FC<PipelineProps> = ({ leads, updateLeadStatus, updateLead
                                         )}
                                         <h4 className="font-bold text-gray-800 text-sm leading-tight truncate" title={lead.company}>{lead.company}</h4>
                                     </div>
-                                    <div className="relative shrink-0 flex gap-1">
+                                    <div className="relative shrink-0 flex gap-1 items-center">
+                                        <button
+                                            onClick={(e) => { e.stopPropagation(); openLeadInMaps(lead); }}
+                                            className="text-gray-300 hover:text-emerald-600 hover:bg-gray-50 p-0.5 rounded transition-colors"
+                                            title="Abrir no Google Maps"
+                                        >
+                                            <MapPin className="w-4 h-4" />
+                                        </button>
                                         <button
                                             onClick={(e) => toggleExpand(lead.id, e)}
                                             className="text-gray-300 hover:text-indigo-600 hover:bg-gray-50 p-0.5 rounded transition-colors"
@@ -353,42 +470,45 @@ const Pipeline: React.FC<PipelineProps> = ({ leads, updateLeadStatus, updateLead
                                         >
                                             {expandedLeadId === lead.id ? <ChevronUp className="w-4 h-4"/> : <ChevronDown className="w-4 h-4" />}
                                         </button>
-                                        <button 
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                setOpenMenuId(openMenuId === lead.id ? null : lead.id);
-                                            }}
-                                            className="text-gray-300 hover:text-gray-600 hover:bg-gray-50 p-0.5 rounded transition-colors"
-                                        >
-                                            <MoreHorizontal className="w-4 h-4" />
-                                        </button>
+                                        <div className="hidden sm:block">
+                                          <button 
+                                              onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  setOpenMenuId(openMenuId === lead.id ? null : lead.id);
+                                              }}
+                                              className="text-gray-300 hover:text-gray-600 hover:bg-gray-50 p-0.5 rounded transition-colors"
+                                              aria-label="Mais opções"
+                                          >
+                                              <MoreHorizontal className="w-4 h-4" />
+                                          </button>
 
-                                        {openMenuId === lead.id && (
-                                            <>
-                                                <div 
-                                                    className="fixed inset-0 z-40" 
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        setOpenMenuId(null);
-                                                    }} 
-                                                />
-                                                <div className="absolute right-0 top-6 w-32 bg-white rounded-lg shadow-xl border border-gray-100 z-50 py-1 animate-in fade-in zoom-in-95 duration-100">
-                                                    <button 
-                                                        onClick={(e) => { e.stopPropagation(); openEditModal(lead); }}
-                                                        className="w-full text-left px-3 py-2 text-xs text-gray-700 hover:bg-gray-50 flex items-center gap-2 transition-colors"
-                                                    >
-                                                        <Edit className="w-3 h-3 text-gray-400" /> Editar
-                                                    </button>
-                                                    <div className="border-t border-gray-100 my-1"></div>
-                                                    <button 
-                                                        onClick={(e) => { e.stopPropagation(); handleDelete(lead.id); }}
-                                                        className="w-full text-left px-3 py-2 text-xs text-red-600 hover:bg-red-50 flex items-center gap-2 transition-colors"
-                                                    >
-                                                        <Trash2 className="w-3 h-3 text-red-400" /> Excluir
-                                                    </button>
-                                                </div>
-                                            </>
-                                        )}
+                                          {openMenuId === lead.id && (
+                                              <>
+                                                  <div 
+                                                      className="fixed inset-0 z-40" 
+                                                      onClick={(e) => {
+                                                          e.stopPropagation();
+                                                          setOpenMenuId(null);
+                                                      }} 
+                                                  />
+                                                  <div className="absolute right-0 top-6 w-32 bg-white rounded-lg shadow-xl border border-gray-100 z-50 py-1 animate-in fade-in zoom-in-95 duration-100">
+                                                      <button 
+                                                          onClick={(e) => { e.stopPropagation(); openEditModal(lead); }}
+                                                          className="w-full text-left px-3 py-2 text-xs text-gray-700 hover:bg-gray-50 flex items-center gap-2 transition-colors"
+                                                      >
+                                                          <Edit className="w-3 h-3 text-gray-400" /> Editar
+                                                      </button>
+                                                      <div className="border-t border-gray-100 my-1"></div>
+                                                      <button 
+                                                          onClick={(e) => { e.stopPropagation(); handleDelete(lead.id); }}
+                                                          className="w-full text-left px-3 py-2 text-xs text-red-600 hover:bg-red-50 flex items-center gap-2 transition-colors"
+                                                      >
+                                                          <Trash2 className="w-3 h-3 text-red-400" /> Excluir
+                                                      </button>
+                                                  </div>
+                                              </>
+                                          )}
+                                        </div>
                                     </div>
                                 </div>
                                 
@@ -413,46 +533,109 @@ const Pipeline: React.FC<PipelineProps> = ({ leads, updateLeadStatus, updateLead
                                         </div>
                                     )}
                                     {hasData(lead.phone) && (
-                                        <div title={`Telefone: ${lead.phone}`} className="p-1 bg-green-50 text-green-600 rounded opacity-75 group-hover:opacity-100 transition-opacity">
-                                            <Phone className="w-3 h-3" />
-                                        </div>
+                                        <>
+                                          <div title={`Telefone: ${lead.phone}`} className="p-1 bg-green-50 text-green-600 rounded opacity-75 group-hover:opacity-100 transition-opacity">
+                                              <Phone className="w-3 h-3" />
+                                          </div>
+                                          <button
+                                            onClick={(e) => { e.stopPropagation(); openWhatsModal(lead); }}
+                                            className="p-1 bg-emerald-50 text-emerald-700 rounded opacity-85 hover:opacity-100 transition-opacity"
+                                            title="Gerar e enviar mensagem no WhatsApp"
+                                          >
+                                            <MessageCircle className="w-3 h-3" />
+                                          </button>
+                                        </>
                                     )}
-                                    {hasData(lead.approachMessage) && (
-                                        <div title="Mensagem Gerada pela IA" className="p-1 bg-purple-50 text-purple-600 rounded opacity-75 group-hover:opacity-100 transition-opacity">
-                                            <MessageSquare className="w-3 h-3" />
-                                        </div>
-                                    )}
+                                {hasData(lead.approachMessage) && (
+                                    <div title="Mensagem Gerada pela IA" className="p-1 bg-purple-50 text-purple-600 rounded opacity-75 group-hover:opacity-100 transition-opacity">
+                                        <MessageSquare className="w-3 h-3" />
+                                    </div>
+                                )}
+                                    <button
+                                        onClick={(e) => { e.stopPropagation(); handleNoteChange(lead.id, `${lead.notes || ''}\nPróxima ação marcada.`); }}
+                                        className="p-1 bg-gray-100 text-gray-500 rounded opacity-75 hover:opacity-100 transition-opacity text-[9px] flex items-center gap-1"
+                                        title="Adicionar próxima ação"
+                                    >
+                                        <Clock className="w-3 h-3" /> Próxima tarefa
+                                    </button>
+                                </div>
+
+                                {/* Mobile actions */}
+                                <div className="flex sm:hidden gap-2 mt-2">
+                                    <button 
+                                        onClick={(e) => { e.stopPropagation(); openEditModal(lead); }}
+                                        className="flex-1 px-3 py-1.5 text-xs font-semibold rounded-lg bg-indigo-50 text-indigo-700 border border-indigo-100"
+                                    >
+                                        Editar
+                                    </button>
+                                    <button 
+                                        onClick={(e) => { e.stopPropagation(); handleDelete(lead.id); }}
+                                        className="flex-1 px-3 py-1.5 text-xs font-semibold rounded-lg bg-red-50 text-red-700 border border-red-100"
+                                    >
+                                        Excluir
+                                    </button>
                                 </div>
                                 
                                 <div className="flex justify-between items-center pt-2 border-t border-gray-50">
                                     <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-100">
-                                        $ {lead.value.toLocaleString()}
+                                        R$ {lead.value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                                     </span>
-                                    {!lead.enriched && (
+                                    <div className="flex items-center gap-1">
+                                        {!lead.enriched && (
                                             <button 
                                             onClick={() => enrichLead(lead.id)}
                                             className="text-[9px] bg-indigo-50 text-indigo-600 px-1.5 py-0.5 rounded hover:bg-indigo-100 font-medium flex items-center gap-1 border border-indigo-100"
                                             >
                                             <Bot className="w-3 h-3" /> Enriquecer
                                             </button>
-                                    )}
-                                    {lead.enriched && (
-                                        <span className="text-[9px] text-gray-400 flex items-center gap-0.5">
-                                            <Bot className="w-3 h-3" /> IA Check
-                                        </span>
-                                    )}
+                                        )}
+                                        {lead.enriched && (
+                                            <span className="text-[9px] text-gray-400 flex items-center gap-0.5">
+                                                <Bot className="w-3 h-3" /> IA Check
+                                            </span>
+                                        )}
+                                    </div>
                                 </div>
 
                                 {/* Missing Data Alert */}
-                                {!hasData(lead.email) && !hasData(lead.phone) && (
-                                    <div className="mt-2 bg-red-50 border border-red-100 rounded p-1.5 flex items-start gap-1.5">
-                                        <AlertOctagon className="w-3 h-3 text-red-500 shrink-0 mt-0.5" />
-                                        <div>
-                                            <p className="text-[9px] font-bold text-red-600 leading-none mb-0.5">Dados Insuficientes</p>
-                                            <p className="text-[8px] text-red-400 leading-tight">Contato não encontrado. Baixa chance de conversão.</p>
-                                        </div>
-                                    </div>
-                                )}
+                                {(() => {
+                                    const risk = getRiskFlags(lead);
+                                    const alerts: JSX.Element[] = [];
+                                    if (!hasData(lead.email) && !hasData(lead.phone)) {
+                                        alerts.push(
+                                            <div key="contact" className="mt-2 bg-red-50 border border-red-100 rounded p-1.5 flex items-start gap-1.5">
+                                                <AlertOctagon className="w-3 h-3 text-red-500 shrink-0 mt-0.5" />
+                                                <div>
+                                                    <p className="text-[9px] font-bold text-red-600 leading-none mb-0.5">Dados Insuficientes</p>
+                                                    <p className="text-[8px] text-red-400 leading-tight">Contato não encontrado. Baixa chance de conversão.</p>
+                                                </div>
+                                            </div>
+                                        );
+                                    }
+                                    if (risk.stale) {
+                                        alerts.push(
+                                            <div key="stale" className="mt-2 bg-amber-50 border border-amber-100 rounded p-1.5 flex items-start gap-1.5">
+                                                <AlertTriangle className="w-3 h-3 text-amber-600 shrink-0 mt-0.5" />
+                                                <div>
+                                                    <p className="text-[9px] font-bold text-amber-700 leading-none mb-0.5">Sem contato há {risk.days}d</p>
+                                                    <p className="text-[8px] text-amber-500 leading-tight">Faça um follow-up rápido.</p>
+                                                </div>
+                                            </div>
+                                        );
+                                    }
+                                    if (risk.noOwner) {
+                                        alerts.push(
+                                            <div key="owner" className="mt-2 bg-blue-50 border border-blue-100 rounded p-1.5 flex items-start gap-1.5">
+                                                <AlertTriangle className="w-3 h-3 text-blue-600 shrink-0 mt-0.5" />
+                                                <div>
+                                                    <p className="text-[9px] font-bold text-blue-700 leading-none mb-0.5">Sem dono definido</p>
+                                                    <p className="text-[8px] text-blue-500 leading-tight">Atribua um responsável.</p>
+                                                </div>
+                                            </div>
+                                        );
+                                    }
+                                    return alerts;
+                                })()}
 
                                 {/* Expanded Content: Notes & History */}
                                 {expandedLeadId === lead.id && (
@@ -758,6 +941,49 @@ const Pipeline: React.FC<PipelineProps> = ({ leads, updateLeadStatus, updateLead
                         </div>
                         <div className="grid grid-cols-2 gap-4">
                              <div>
+                                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Setor / Indústria</label>
+                                <div className="relative" onClick={() => setIsIndustryOpen(!isIndustryOpen)}>
+                                    <Target className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4 pointer-events-none" />
+                                    <button
+                                        type="button"
+                                        className="w-full pl-10 pr-9 py-2 border border-gray-300 rounded-lg text-sm bg-white text-gray-900 text-left focus:ring-2 focus:ring-indigo-500 outline-none flex justify-between items-center"
+                                    >
+                                        <span className={createForm.tags && createForm.tags[0] ? 'text-gray-900' : 'text-gray-400'}>
+                                            {createForm.tags && createForm.tags[0] ? createForm.tags[0] : 'Selecione a indústria'}
+                                        </span>
+                                        <ChevronDown className="w-4 h-4 text-gray-400 absolute right-3" />
+                                    </button>
+                                    {isIndustryOpen && (
+                                        <div className="absolute top-full left-0 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-xl z-50 max-h-40 overflow-y-auto">
+                                            {INDUSTRY_OPTIONS.map(opt => (
+                                                <div
+                                                    key={opt}
+                                                    onClick={() => { setCreateForm({ ...createForm, tags: [opt] }); setIsIndustryOpen(false); }}
+                                                    className={`px-3 py-2 text-sm cursor-pointer hover:bg-indigo-50 ${createForm.tags && createForm.tags[0] === opt ? 'bg-indigo-50 text-indigo-700 font-semibold' : 'text-gray-700'}`}
+                                                >
+                                                    {opt}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                             </div>
+                             <div>
+                                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Cargo</label>
+                                <div className="relative">
+                                    <Briefcase className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
+                                    <input 
+                                        name="contactRole" 
+                                        value={createForm.contactRole || ''} 
+                                        onChange={handleCreateChange}
+                                        className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg text-sm bg-transparent text-gray-900 focus:ring-2 focus:ring-indigo-500 outline-none" 
+                                        placeholder="Dono, Gerente..."
+                                    />
+                                </div>
+                             </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                             <div>
                                 <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Nome Contato</label>
                                 <div className="relative">
                                     <User className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
@@ -777,7 +1003,9 @@ const Pipeline: React.FC<PipelineProps> = ({ leads, updateLeadStatus, updateLead
                                     <input 
                                         name="value" 
                                         type="number" 
-                                        value={createForm.value || 0} 
+                                        inputMode="numeric"
+                                        min={0}
+                                        value={createForm.value ?? ''} 
                                         onChange={handleCreateChange}
                                         className={`w-full pl-10 pr-3 py-2 border ${errors.value ? 'border-red-500' : 'border-gray-300'} rounded-lg text-sm bg-transparent text-gray-900 focus:ring-2 focus:ring-indigo-500 outline-none`}
                                     />
@@ -820,16 +1048,22 @@ const Pipeline: React.FC<PipelineProps> = ({ leads, updateLeadStatus, updateLead
                         </div>
                         <div>
                             <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Estágio Inicial</label>
-                            <select 
-                                name="status" 
-                                value={createForm.status} 
-                                onChange={handleCreateChange}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-transparent text-gray-900 focus:ring-2 focus:ring-indigo-500 outline-none"
-                            >
+                            <div className="grid grid-cols-2 gap-2">
                                 {Object.values(PipelineStage).map(stage => (
-                                    <option key={stage} value={stage}>{stage}</option>
+                                    <button
+                                        key={stage}
+                                        type="button"
+                                        onClick={() => setCreateForm({ ...createForm, status: stage })}
+                                        className={`px-3 py-2 text-xs font-semibold rounded-lg border transition-colors ${
+                                            createForm.status === stage 
+                                            ? 'bg-indigo-50 border-indigo-200 text-indigo-700' 
+                                            : 'bg-white border-gray-200 text-gray-600 hover:border-indigo-200'
+                                        }`}
+                                    >
+                                        {stage}
+                                    </button>
                                 ))}
-                            </select>
+                            </div>
                         </div>
                     </div>
                     <div className="px-6 py-4 bg-gray-50 flex justify-end gap-2">
@@ -848,6 +1082,84 @@ const Pipeline: React.FC<PipelineProps> = ({ leads, updateLeadStatus, updateLead
                     </div>
                 </div>
             </div>
+        )}
+
+        {/* WhatsApp Modal */}
+        {whatsLead && (
+          <div className="fixed inset-0 bg-black/40 z-[120] flex items-center justify-center p-4">
+              <div className="bg-white rounded-xl shadow-2xl border border-gray-200 max-w-lg w-full p-6 space-y-4">
+                  <div className="flex items-start justify-between">
+                      <div>
+                          <p className="text-xs uppercase text-gray-500 font-bold mb-1">WhatsApp</p>
+                          <h3 className="text-lg font-bold text-gray-800">{whatsLead.company || whatsLead.name}</h3>
+                          <p className="text-sm text-gray-500">{whatsLead.phone}</p>
+                      </div>
+                      <button onClick={() => { setWhatsLead(null); setWhatsMessage(''); }} className="text-gray-400 hover:text-gray-600">
+                          <X className="w-5 h-5" />
+                      </button>
+                  </div>
+
+                <div className="flex gap-2">
+                    <button
+                      onClick={() => regenerateWhats('pt')}
+                      className={`flex-1 px-3 py-2 text-sm rounded-lg border ${whatsLang === 'pt' ? 'border-indigo-500 text-indigo-600 bg-indigo-50' : 'border-gray-200 text-gray-700 hover:bg-gray-50'}`}
+                      disabled={isGeneratingWhats}
+                    >
+                      PT-BR
+                    </button>
+                    <button
+                      onClick={() => regenerateWhats('en')}
+                      className={`flex-1 px-3 py-2 text-sm rounded-lg border ${whatsLang === 'en' ? 'border-indigo-500 text-indigo-600 bg-indigo-50' : 'border-gray-200 text-gray-700 hover:bg-gray-50'}`}
+                      disabled={isGeneratingWhats}
+                    >
+                      English
+                    </button>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                    {(['consultivo','direto','amigavel','urgente'] as const).map(t => (
+                        <button
+                          key={t}
+                          onClick={() => regenerateWhats(whatsLang, t)}
+                          className={`px-3 py-2 text-sm rounded-lg border ${whatsTone === t ? 'border-emerald-500 text-emerald-700 bg-emerald-50' : 'border-gray-200 text-gray-700 hover:bg-gray-50'}`}
+                          disabled={isGeneratingWhats}
+                        >
+                          {t.charAt(0).toUpperCase() + t.slice(1)}
+                        </button>
+                    ))}
+                </div>
+
+                  <div className="min-h-[140px] border border-gray-200 rounded-lg p-3 bg-gray-50 text-sm text-gray-800">
+                      {isGeneratingWhats ? (
+                          <div className="flex items-center gap-2 text-gray-500">
+                              <Loader2 className="w-4 h-4 animate-spin" /> Gerando mensagem...
+                          </div>
+                      ) : (
+                          <textarea
+                            value={whatsMessage}
+                            onChange={(e) => setWhatsMessage(e.target.value)}
+                            className="w-full h-32 bg-transparent outline-none resize-none"
+                          />
+                      )}
+                  </div>
+
+                  <div className="flex justify-end gap-2">
+                      <button
+                        onClick={() => { setWhatsLead(null); setWhatsMessage(''); }}
+                        className="px-4 py-2 text-sm rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50"
+                      >
+                        Cancelar
+                      </button>
+                      <button
+                        onClick={sendWhatsApp}
+                        disabled={!whatsMessage || isGeneratingWhats}
+                        className="px-4 py-2 text-sm rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-60 flex items-center gap-2"
+                      >
+                        <Send className="w-4 h-4" /> Enviar no WhatsApp
+                      </button>
+                  </div>
+              </div>
+          </div>
         )}
     </div>
   );

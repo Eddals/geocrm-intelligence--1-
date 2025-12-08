@@ -61,6 +61,45 @@ export interface Lead {
   // Scraper Data (New)
   openingHours?: string;
   description?: string;
+
+  // External Map reference
+  mapsUri?: string;
+}
+
+// Map/Grounding specific types (lightweight lead shape for grounded searches)
+export interface SocialLinks {
+  instagram?: string;
+  facebook?: string;
+  linkedin?: string;
+  twitter?: string;
+}
+
+export interface GroundedLead {
+  id: string; // generated client-side
+  name: string;
+  address: string;
+  phone?: string;
+  website?: string;
+  owner?: string;
+  description: string;
+  socials?: SocialLinks;
+  mapsUri?: string; // Verified link from grounding
+  rating?: number;
+}
+
+export interface SearchState {
+  niche: string;
+  location: string;
+  isLocating: boolean;
+  isLoading: boolean;
+  error: string | null;
+  results: GroundedLead[];
+  rawResponse?: string;
+}
+
+export interface GeoLocation {
+  latitude: number;
+  longitude: number;
 }
 
 export interface Stats {
@@ -98,6 +137,8 @@ export interface AppSettings {
   userEmail: string;
   userAvatar: string;
   companySector: string;
+  businessSummary?: string;
+  userRole?: string;
   
   companyName: string;
   emailNotifications: boolean;
