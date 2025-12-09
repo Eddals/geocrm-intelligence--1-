@@ -6,13 +6,12 @@ import Pipeline from './components/Pipeline';
 import Discovery from './components/Discovery';
 import Settings from './components/Settings';
 import EmailAutomation from './components/EmailAutomation';
-import WhatsAppButton from './components/WhatsAppButton';
 import Login from './components/Login';
 import Register from './components/Register';
-import { Lead, PipelineStage, Stats, ViewMode, AutomationRule, AppSettings, Notification, LeadHistory } from './types';
+import { Lead, PipelineStage, Stats, ViewMode, AutomationRule, AppSettings, Notification, LeadHistory, PlanTier } from './types';
 import { enrichLeadData } from './services/geminiService';
 import { enrichLeadWithOpenAI } from './services/openaiService';
-import { X, CheckCircle2, AlertTriangle, Info } from 'lucide-react';
+import { X, CheckCircle2, AlertTriangle, Info, Sun, Moon } from 'lucide-react';
 import { supabaseRequest } from './services/supabaseClient';
 
 const normalizeLeadFromSupabase = (row: any): Lead => ({
@@ -110,10 +109,49 @@ const DEFAULT_SETTINGS: AppSettings = {
     userAvatar: '',
     companyName: 'My Agency',
     companySector: 'Marketing Digital', // Default sector
+    subscriptionPlan: 'Start',
     emailNotifications: true,
     autoEnrichment: true,
     highValueThreshold: 10000,
     openAiKey: ''
+};
+
+// Simple plan matrix to control limits and feature flags
+const PLAN_RULES: Record<PlanTier, {
+    leadLimit: number;              // monthly limit
+    maxAutomations: number;
+    allowEnrichment: boolean;
+    allowEmailAutomation: boolean;
+    allowMapSearch: boolean;
+}> = {
+    Start: {
+        leadLimit: 50,
+        maxAutomations: 1,
+        allowEnrichment: false,
+        allowEmailAutomation: false,
+        allowMapSearch: false
+    },
+    Pro: {
+        leadLimit: 200,
+        maxAutomations: 3,
+        allowEnrichment: true,
+        allowEmailAutomation: true,
+        allowMapSearch: true
+    },
+    Growth: {
+        leadLimit: 1000,
+        maxAutomations: 10,
+        allowEnrichment: true,
+        allowEmailAutomation: true,
+        allowMapSearch: true
+    },
+    Enterprise: {
+        leadLimit: Infinity,
+        maxAutomations: 999,
+        allowEnrichment: true,
+        allowEmailAutomation: true,
+        allowMapSearch: true
+    }
 };
 
 const App: React.FC = () => {
@@ -143,12 +181,45 @@ const App: React.FC = () => {
 
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [discoveryResults, setDiscoveryResults] = useState<Partial<Lead>[]>([]);
+  const [theme, setTheme] = useState<'light' | 'dark'>(() => {
+    if (typeof window === 'undefined') return 'light';
+    return (localStorage.getItem('geocrm_theme') as 'light' | 'dark') || 'light';
+  });
 
-  // Ensure dark mode is removed on mount
+  const activePlan: PlanTier = settings.subscriptionPlan || 'Start';
+  const planRules = PLAN_RULES[activePlan];
+
+  // --- PLAN + USAGE HELPERS ---
+  const leadsCreatedThisMonth = (list: Lead[]) => {
+      const now = new Date();
+      return list.filter(l => {
+          const d = new Date(l.createdAt);
+          return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+      }).length;
+  };
+
+  const remainingLeadQuota = () => {
+      if (!Number.isFinite(planRules.leadLimit)) return Infinity;
+      const used = leadsCreatedThisMonth(leads);
+      return Math.max(planRules.leadLimit - used, 0);
+  };
+
+  // Currency helpers
+  const BRL_TO_USD = 5.2;
+  const isBrazilLead = (lead: Partial<Lead>) => {
+      const phone = lead.phone || '';
+      const city = (lead.city || '').toLowerCase();
+      return phone.replace(/\D/g, '').startsWith('55') || city.includes('brasil') || city.includes('brazil') || city.includes('rio') || city.includes('são') || city.includes('sao');
+  };
+  const leadValueUSD = (lead: Partial<Lead>) => {
+      const v = Number(lead.value) || 0;
+      return isBrazilLead(lead) ? v / BRL_TO_USD : v;
+  };
+
+  // Apply theme + restore auth session
   useEffect(() => {
-    document.documentElement.classList.remove('dark');
-    localStorage.removeItem('geocrm_theme');
-    // restore auth session
+    document.documentElement.classList.toggle('dark', theme === 'dark');
+    localStorage.setItem('geocrm_theme', theme);
     const savedAuth = localStorage.getItem('geocrm_auth');
     if (savedAuth) {
         try {
@@ -167,7 +238,24 @@ const App: React.FC = () => {
         }
     }
     setAuthLoaded(true);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // React to theme changes (e.g., after toggle)
+  useEffect(() => {
+    document.documentElement.classList.toggle('dark', theme === 'dark');
+    localStorage.setItem('geocrm_theme', theme);
+  }, [theme]);
+
+  // Persist settings to localStorage when authenticated to keep plan info/resume session
+  useEffect(() => {
+    if (isAuthenticated && currentUserId) {
+        localStorage.setItem('geocrm_auth', JSON.stringify({
+            userId: currentUserId,
+            settings
+        }));
+    }
+  }, [isAuthenticated, currentUserId, settings]);
 
   // --------------------------
 
@@ -196,7 +284,8 @@ const App: React.FC = () => {
               companyName: userData.companyName || prev.companyName,
               companySector: userData.companySector || prev.companySector,
               businessSummary: userData.businessSummary || prev.businessSummary,
-              userRole: userData.userRole || prev.userRole
+              userRole: userData.userRole || prev.userRole,
+              subscriptionPlan: (userData as any).subscriptionPlan || (userData as any).plan || prev.subscriptionPlan || 'Start'
           }));
           if (userData.id) {
               setCurrentUserId(userData.id);
@@ -209,7 +298,8 @@ const App: React.FC = () => {
                     companyName: userData.companyName,
                     companySector: userData.companySector,
                     businessSummary: userData.businessSummary,
-                    userRole: userData.userRole
+                    userRole: userData.userRole,
+                    subscriptionPlan: (userData as any).subscriptionPlan || (userData as any).plan || 'Start'
                   }
               }));
           }
@@ -245,7 +335,8 @@ const App: React.FC = () => {
                 contact_phone: newSettings.contactPhone,
                 social_linkedin: newSettings.socialLinkedin,
                 social_instagram: newSettings.socialInstagram,
-                social_website: newSettings.socialWebsite
+                social_website: newSettings.socialWebsite,
+                plan: newSettings.subscriptionPlan
               }, 
               query: `?id=eq.${currentUserId}` 
             });
@@ -270,7 +361,7 @@ const App: React.FC = () => {
     leadsInContact: leads.filter(l => l.status === PipelineStage.CONTACT).length,
     leadsConverted: leads.filter(l => l.status === PipelineStage.CLOSED).length,
     conversionRate: leads.length > 0 ? (leads.filter(l => l.status === PipelineStage.CLOSED).length / leads.length) * 100 : 0,
-    totalPipelineValue: leads.reduce((acc, curr) => acc + curr.value, 0),
+    totalPipelineValue: leads.reduce((acc, curr) => acc + leadValueUSD(curr), 0),
     topCity: (() => {
       if (leads.length === 0) return 'N/A';
       const cityCounts = leads.reduce((acc, lead) => {
@@ -299,14 +390,46 @@ const App: React.FC = () => {
       setNotifications(prev => prev.filter(n => n.id !== id));
   };
 
+  // Notify when credits are ending or exceeded (per month)
+  const creditAlertRef = React.useRef<'ok' | 'warn' | 'exceeded'>('ok');
+  useEffect(() => {
+      if (!Number.isFinite(planRules.leadLimit)) {
+          creditAlertRef.current = 'ok';
+          return;
+      }
+      const used = leadsCreatedThisMonth(leads);
+      const warnThreshold = planRules.leadLimit * 0.8;
+
+      if (used >= planRules.leadLimit) {
+          if (creditAlertRef.current !== 'exceeded') {
+              addNotification(`Você ultrapassou o limite de ${planRules.leadLimit} leads do plano ${activePlan}. Faça upgrade para continuar gerando.`, 'warning');
+              creditAlertRef.current = 'exceeded';
+          }
+      } else if (used >= warnThreshold) {
+          if (creditAlertRef.current !== 'warn') {
+              addNotification(`Atenção: você já usou ${used}/${planRules.leadLimit} leads este mês. O limite do plano ${activePlan} está acabando.`, 'info');
+              creditAlertRef.current = 'warn';
+          }
+      } else {
+          // reset state when back under threshold (e.g., new month)
+          creditAlertRef.current = 'ok';
+      }
+  }, [leads, activePlan, planRules.leadLimit]);
+
   // --- Automation Logic ---
   const runAutomations = async (trigger: string, lead: Lead, context?: any, options?: { silent?: boolean }): Promise<Lead> => {
     let updatedLead = { ...lead };
-    const activeRules = automations.filter(r => r.active);
+    const activeRules = automations.filter(r => r.active).slice(0, planRules.maxAutomations);
 
     for (const rule of activeRules) {
         if (rule.trigger === 'ON_CREATE' && trigger === 'ON_CREATE') {
             if (rule.action === 'ENRICH_DATA') {
+                if (!planRules.allowEnrichment) {
+                    if (!options?.silent) {
+                        addNotification(`Enriquecimento avançado é recurso do plano Pro+. Considere fazer upgrade.`, 'warning');
+                    }
+                    continue;
+                }
                 if (settings.openAiKey) {
                     if (!options?.silent) {
                         addNotification(`IA Iniciada: Analisando ${lead.company} para setor ${settings.companySector}...`, 'info');
@@ -420,9 +543,21 @@ const App: React.FC = () => {
         return;
     }
 
+    // Enforce plan quota
+    const remaining = remainingLeadQuota();
+    if (remaining <= 0) {
+        addNotification(`Limite mensal do plano ${activePlan} atingido. Faça upgrade para continuar gerando leads.`, 'warning');
+        return;
+    }
+    let allowedList = leadsToProcess;
+    if (Number.isFinite(planRules.leadLimit) && leadsToProcess.length > remaining) {
+        allowedList = leadsToProcess.slice(0, remaining);
+        addNotification(`Só foi possível adicionar ${remaining} lead(s) com seu plano ${activePlan}. Considere upgrade para mais capacidade.`, 'warning');
+    }
+
     const makeNumericId = () => Date.now() + Math.floor(Math.random() * 1000);
 
-    let leadsToAdd: Lead[] = leadsToProcess.map((l, idx) => ({
+    let leadsToAdd: Lead[] = allowedList.map((l, idx) => ({
         id: String(makeNumericId() + idx),
         tasks: [],
         notes: l.notes || '',
@@ -447,6 +582,15 @@ const App: React.FC = () => {
 
     setLeads(prev => [...prev, ...processedLeads]);
     const duplicateNote = duplicates > 0 ? ` ${duplicates} duplicado(s) ignorado(s).` : '';
+    const monthlyUsed = leadsCreatedThisMonth([...leads, ...processedLeads]);
+    if (Number.isFinite(planRules.leadLimit)) {
+        const threshold = planRules.leadLimit * 0.8;
+        if (monthlyUsed >= planRules.leadLimit) {
+            addNotification(`Você atingiu o limite mensal de ${planRules.leadLimit} leads do plano ${activePlan}.`, 'warning');
+        } else if (monthlyUsed >= threshold) {
+            addNotification(`Você usou ${monthlyUsed}/${planRules.leadLimit} leads neste mês. Estamos chegando ao limite do plano ${activePlan}.`, 'info');
+        }
+    }
     addNotification(`Leads adicionados ao CRM Pipeline: ${processedLeads.length} lead(s) incluído(s).${duplicateNote}`, 'success');
 
     if (currentUserId) {
@@ -495,6 +639,13 @@ const App: React.FC = () => {
     switch (currentView) {
       case 'dashboard': return <Dashboard stats={stats} leads={leads} userName={settings.userName} />;
       case 'map':
+        if (!planRules.allowMapSearch) {
+            return (
+                <div className="bg-white border border-amber-200 text-amber-800 p-6 rounded-xl shadow-sm">
+                    Mapa Inteligente e extração de leads por localização estão disponíveis apenas a partir do plano Pro. Faça upgrade para usar este recurso.
+                </div>
+            );
+        }
         return <LeadMap 
             leads={leads} 
             discoveryResults={discoveryResults}
@@ -515,6 +666,13 @@ const App: React.FC = () => {
             notify={addNotification}
         />;
       case 'discovery':
+        if (!planRules.allowMapSearch) {
+            return (
+                <div className="bg-white border border-amber-200 text-amber-800 p-6 rounded-xl shadow-sm">
+                    Captação de leads está disponível somente para planos Pro ou superiores. Faça upgrade para liberar.
+                </div>
+            );
+        }
         return <Discovery 
             addLeads={handleAddLeads} 
             setDiscoveryResults={setDiscoveryResults} 
@@ -523,6 +681,13 @@ const App: React.FC = () => {
             notify={addNotification}
         />;
       case 'email-automation':
+        if (!planRules.allowEmailAutomation) {
+            return (
+                <div className="bg-white border border-amber-200 text-amber-800 p-6 rounded-xl shadow-sm">
+                    Automação de Email está disponível somente para planos Pro ou superiores. Faça upgrade para liberar este módulo.
+                </div>
+            );
+        }
         return <EmailAutomation 
             leads={leads}
             settings={settings}
@@ -549,7 +714,11 @@ const App: React.FC = () => {
   }
 
   return (
-    <div className={`flex min-h-screen bg-gray-50 text-gray-900 font-sans transition-colors duration-200`}>
+    <div className={`flex min-h-screen bg-gray-50 dark:bg-[#0b0f1a] text-gray-900 dark:text-slate-100 font-sans transition-colors duration-200 relative overflow-hidden`}>
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(16,185,129,0.08),transparent_25%),radial-gradient(circle_at_82%_12%,rgba(34,197,94,0.08),transparent_22%),radial-gradient(circle_at_65%_62%,rgba(59,130,246,0.05),transparent_32%)] dark:bg-[radial-gradient(circle_at_20%_20%,rgba(16,185,129,0.14),transparent_25%),radial-gradient(circle_at_82%_12%,rgba(59,130,246,0.12),transparent_24%),radial-gradient(circle_at_65%_62%,rgba(168,85,247,0.10),transparent_32%)]" />
+      <div className="pointer-events-none absolute -left-32 -top-28 h-80 w-80 rounded-full bg-emerald-500/12 dark:bg-emerald-500/18 blur-3xl" />
+      <div className="pointer-events-none absolute -right-28 top-12 h-72 w-72 rounded-full bg-sky-500/12 dark:bg-sky-500/16 blur-3xl" />
+      <div className="pointer-events-none absolute right-24 bottom-12 h-60 w-60 rounded-full bg-emerald-400/12 dark:bg-indigo-500/14 blur-3xl" />
       <Sidebar 
         currentView={currentView} 
         setView={setCurrentView} 
@@ -600,17 +769,63 @@ const App: React.FC = () => {
           ))}
       </div>
 
-      <main className="flex-1 md:ml-64 p-4 sm:p-6 lg:p-8 pt-16 md:pt-8 min-h-screen overflow-y-auto">
-        <header className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
-            <h1 className="text-xl sm:text-2xl font-bold capitalize text-gray-800">
-                {currentView === 'map' ? 'Mapa Inteligente' : currentView === 'settings' ? 'Configurações' : currentView === 'email-automation' ? 'Automação' : currentView}
-            </h1>
-        </header>
+      <main className="relative flex-1 md:ml-64 p-4 sm:p-6 lg:p-8 pt-16 md:pt-8 min-h-screen overflow-y-auto page-animate">
+        <div className="max-w-6xl mx-auto space-y-6">
+          <div className="mb-2">
+              <div className="shadow-lg shadow-emerald-500/5 surface-raise">
+                  <div className="relative bg-white/85 dark:bg-slate-900/70 backdrop-blur-sm border border-white/80 dark:border-slate-800 rounded-xl p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                      <div className="flex items-center gap-3">
+                          <span className="text-xs font-semibold px-2.5 py-1.5 rounded-lg bg-gray-900 text-white shadow-sm dark:bg-white dark:text-slate-900">
+                              Plano {activePlan}
+                          </span>
+                          <div className="flex flex-col sm:flex-row sm:items-center sm:gap-2">
+                            <span className="text-sm text-gray-800 font-semibold leading-tight">
+                              Leads no mês: {Number.isFinite(planRules.leadLimit) ? `${leadsCreatedThisMonth(leads)}/${planRules.leadLimit}` : `${leadsCreatedThisMonth(leads)} / ilimitado`}
+                            </span>
+                            <span className="text-[11px] uppercase tracking-[0.2em] text-emerald-600 font-semibold bg-emerald-50 border border-emerald-100 px-2 py-1 rounded-full">
+                              CRM Inteligente
+                            </span>
+                          </div>
+                      </div>
+                      {!Number.isFinite(planRules.leadLimit) ? (
+                          <span className="text-xs text-emerald-700 font-semibold">Limite ilimitado</span>
+                      ) : (
+                          <span className="text-xs text-gray-500 flex items-center gap-2">
+                            <span className="inline-flex h-2.5 w-2.5 rounded-full bg-amber-400 animate-pulse shadow-[0_0_0_6px_rgba(251,191,36,0.18)]" />
+                            Ultrapassou o limite? Faça upgrade para liberar mais leads.
+                          </span>
+                      )}
+                  </div>
+              </div>
+          </div>
+          <header className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+              <div>
+                <p className="text-xs uppercase tracking-[0.3em] text-gray-400 font-semibold">Painel</p>
+                <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-gray-800">
+                    {currentView === 'map' ? 'Mapa Inteligente' : currentView === 'settings' ? 'Configurações' : currentView === 'email-automation' ? 'Automação' : currentView}
+                </h1>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+                  className="px-3 py-2 rounded-full border border-gray-200 dark:border-slate-700 bg-white/80 dark:bg-slate-900/80 text-xs font-semibold text-gray-700 dark:text-slate-100 shadow-sm flex items-center gap-2 transition-colors hover:bg-gray-100 hover:text-gray-800 dark:hover:bg-slate-800 dark:hover:text-white"
+                >
+                  {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+                  {theme === 'dark' ? 'Modo Claro' : 'Modo Escuro'}
+                </button>
+                <button className="neon-cta text-sm">
+                  ✦ Gerar Site
+                  <span className="moving-line" aria-hidden="true" />
+                </button>
+              </div>
+          </header>
 
-        {renderContent()}
+          <div key={currentView} className="page-animate space-y-6">
+            {renderContent()}
+          </div>
+        </div>
       </main>
       
-      <WhatsAppButton />
     </div>
   );
 };
