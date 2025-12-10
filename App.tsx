@@ -6,6 +6,7 @@ import Pipeline from './components/Pipeline';
 import Discovery from './components/Discovery';
 import Settings from './components/Settings';
 import EmailAutomation from './components/EmailAutomation';
+import Calendar from './components/Calendar';
 import Login from './components/Login';
 import Register from './components/Register';
 import { Lead, PipelineStage, Stats, ViewMode, AutomationRule, AppSettings, Notification, LeadHistory, PlanTier } from './types';
@@ -176,6 +177,8 @@ const App: React.FC = () => {
       return saved ? JSON.parse(saved) : DEFAULT_SETTINGS;
   });
   const [authLoaded, setAuthLoaded] = useState(false);
+  const hasAppliedThemeOnce = React.useRef(false);
+  const themeTransitionTimeout = React.useRef<number | null>(null);
   
   // ---------------------------------------
 
@@ -243,8 +246,30 @@ const App: React.FC = () => {
 
   // React to theme changes (e.g., after toggle)
   useEffect(() => {
+    const triggerThemeTransition = () => {
+        document.documentElement.classList.add('theme-transition');
+        if (themeTransitionTimeout.current) {
+            window.clearTimeout(themeTransitionTimeout.current);
+        }
+        themeTransitionTimeout.current = window.setTimeout(() => {
+            document.documentElement.classList.remove('theme-transition');
+        }, 300);
+    };
+
+    if (hasAppliedThemeOnce.current) {
+        triggerThemeTransition();
+    } else {
+        hasAppliedThemeOnce.current = true;
+    }
+
     document.documentElement.classList.toggle('dark', theme === 'dark');
     localStorage.setItem('geocrm_theme', theme);
+
+    return () => {
+        if (themeTransitionTimeout.current) {
+            window.clearTimeout(themeTransitionTimeout.current);
+        }
+    };
   }, [theme]);
 
   // Persist settings to localStorage when authenticated to keep plan info/resume session
@@ -557,21 +582,32 @@ const App: React.FC = () => {
 
     const makeNumericId = () => Date.now() + Math.floor(Math.random() * 1000);
 
-    let leadsToAdd: Lead[] = allowedList.map((l, idx) => ({
-        id: String(makeNumericId() + idx),
-        tasks: [],
-        notes: l.notes || '',
-        enriched: false,
-        source: 'Manual',
-        status: PipelineStage.NEW,
-        tags: [],
-        lat: 0,
-        lng: 0,
-        createdAt: new Date().toISOString(),
-        history: [{ date: new Date().toISOString(), description: 'Lead criado no sistema', type: 'creation' }],
-        ...l,
-        value: toNumeric(l.value, 0),
-    } as Lead));
+    let leadsToAdd: Lead[] = allowedList.map((l, idx) => {
+        const safeName = l.name && String(l.name).trim().length > 0
+            ? String(l.name).trim()
+            : (l.company && String(l.company).trim().length > 0 ? String(l.company).trim() : 'Contato');
+        const safeCompany = l.company && String(l.company).trim().length > 0
+            ? String(l.company).trim()
+            : (safeName || 'Empresa Desconhecida');
+
+        return {
+            id: String(makeNumericId() + idx),
+            tasks: [],
+            notes: l.notes || '',
+            enriched: false,
+            source: 'Manual',
+            status: PipelineStage.NEW,
+            tags: [],
+            lat: 0,
+            lng: 0,
+            createdAt: new Date().toISOString(),
+            history: [{ date: new Date().toISOString(), description: 'Lead criado no sistema', type: 'creation' }],
+            ...l,
+            name: safeName,
+            company: safeCompany,
+            value: toNumeric(l.value, 0),
+        } as Lead;
+    });
 
     const processedLeads: Lead[] = [];
     for (const lead of leadsToAdd) {
@@ -694,6 +730,8 @@ const App: React.FC = () => {
             updateLead={updateLeadDetails}
             notify={addNotification}
         />;
+      case 'calendar':
+        return <Calendar />;
       case 'settings':
         return <Settings 
             settings={settings} 
@@ -714,7 +752,7 @@ const App: React.FC = () => {
   }
 
   return (
-    <div className={`flex min-h-screen bg-gray-50 dark:bg-[#0b0f1a] text-gray-900 dark:text-slate-100 font-sans transition-colors duration-200 relative overflow-hidden`}>
+    <div className={`app-shell flex min-h-screen bg-gray-50 dark:bg-[#0b0f1a] text-gray-900 dark:text-slate-100 font-sans transition-colors duration-200 relative overflow-hidden`}>
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(16,185,129,0.08),transparent_25%),radial-gradient(circle_at_82%_12%,rgba(34,197,94,0.08),transparent_22%),radial-gradient(circle_at_65%_62%,rgba(59,130,246,0.05),transparent_32%)] dark:bg-[radial-gradient(circle_at_20%_20%,rgba(16,185,129,0.14),transparent_25%),radial-gradient(circle_at_82%_12%,rgba(59,130,246,0.12),transparent_24%),radial-gradient(circle_at_65%_62%,rgba(168,85,247,0.10),transparent_32%)]" />
       <div className="pointer-events-none absolute -left-32 -top-28 h-80 w-80 rounded-full bg-emerald-500/12 dark:bg-emerald-500/18 blur-3xl" />
       <div className="pointer-events-none absolute -right-28 top-12 h-72 w-72 rounded-full bg-sky-500/12 dark:bg-sky-500/16 blur-3xl" />
@@ -730,20 +768,20 @@ const App: React.FC = () => {
           {notifications.map((n) => (
               <div 
                   key={n.id} 
-                  className="pointer-events-auto flex items-start gap-3 w-auto min-w-[320px] max-w-sm bg-white text-gray-800 px-4 py-4 rounded-lg shadow-xl border border-gray-100 animate-in slide-in-from-right-full fade-in duration-300 relative overflow-hidden"
+                  className="pointer-events-auto flex items-start gap-3 w-auto min-w-[320px] max-w-sm glass-panel bg-white/90 dark:bg-white/10 backdrop-blur-2xl text-gray-800 dark:text-slate-50 px-4 py-4 rounded-xl shadow-2xl border border-white/80 dark:border-white/10 animate-in slide-in-from-right-full fade-in duration-300 relative overflow-hidden"
               >
                   {/* Accent Line */}
-                  <div className={`absolute left-0 top-0 bottom-0 w-1 ${
-                      n.type === 'success' ? 'bg-emerald-500' : 
-                      n.type === 'warning' ? 'bg-amber-500' : 
-                      'bg-blue-500'
+                  <div className={`absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-b ${
+                      n.type === 'success' ? 'from-emerald-400 via-emerald-500 to-emerald-600' : 
+                      n.type === 'warning' ? 'from-amber-400 via-amber-500 to-amber-600' : 
+                      'from-indigo-400 via-purple-500 to-fuchsia-500'
                   }`}></div>
 
                   {/* Icon */}
-                  <div className={`mt-0.5 shrink-0 p-1.5 rounded-full ${
-                      n.type === 'success' ? 'bg-emerald-50 text-emerald-600' : 
-                      n.type === 'warning' ? 'bg-amber-50 text-amber-600' : 
-                      'bg-blue-50 text-blue-600'
+                  <div className={`mt-0.5 shrink-0 p-1.5 rounded-full shadow-sm ${
+                      n.type === 'success' ? 'bg-emerald-100/80 text-emerald-700 dark:bg-emerald-400/10 dark:text-emerald-200' : 
+                      n.type === 'warning' ? 'bg-amber-100/80 text-amber-700 dark:bg-amber-400/10 dark:text-amber-200' : 
+                      'bg-indigo-100/80 text-indigo-700 dark:bg-indigo-400/10 dark:text-indigo-200'
                   }`}>
                       {n.type === 'success' && <CheckCircle2 size={18} />}
                       {n.type === 'warning' && <AlertTriangle size={18} />}
@@ -755,13 +793,13 @@ const App: React.FC = () => {
                       <p className="text-sm font-semibold leading-none mb-1">
                           {n.type === 'success' ? 'Sucesso' : n.type === 'warning' ? 'Atenção' : 'Informação'}
                       </p>
-                      <p className="text-sm text-gray-500 leading-snug">{n.message}</p>
+                      <p className="text-sm text-gray-600 dark:text-slate-200 leading-snug">{n.message}</p>
                   </div>
 
                   {/* Close */}
                   <button 
                     onClick={() => removeNotification(n.id)} 
-                    className="text-gray-400 hover:text-gray-600 transition-colors"
+                    className="text-gray-400 dark:text-slate-300 hover:text-gray-600 dark:hover:text-white transition-colors"
                   >
                     <X size={16} />
                   </button>
@@ -772,37 +810,37 @@ const App: React.FC = () => {
       <main className="relative flex-1 md:ml-64 p-4 sm:p-6 lg:p-8 pt-16 md:pt-8 min-h-screen overflow-y-auto page-animate">
         <div className="max-w-6xl mx-auto space-y-6">
           <div className="mb-2">
-              <div className="shadow-lg shadow-emerald-500/5 surface-raise">
-                  <div className="relative bg-white/85 dark:bg-slate-900/70 backdrop-blur-sm border border-white/80 dark:border-slate-800 rounded-xl p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                      <div className="flex items-center gap-3">
-                          <span className="text-xs font-semibold px-2.5 py-1.5 rounded-lg bg-gray-900 text-white shadow-sm dark:bg-white dark:text-slate-900">
-                              Plano {activePlan}
-                          </span>
-                          <div className="flex flex-col sm:flex-row sm:items-center sm:gap-2">
-                            <span className="text-sm text-gray-800 font-semibold leading-tight">
-                              Leads no mês: {Number.isFinite(planRules.leadLimit) ? `${leadsCreatedThisMonth(leads)}/${planRules.leadLimit}` : `${leadsCreatedThisMonth(leads)} / ilimitado`}
-                            </span>
-                            <span className="text-[11px] uppercase tracking-[0.2em] text-emerald-600 font-semibold bg-emerald-50 border border-emerald-100 px-2 py-1 rounded-full">
-                              CRM Inteligente
-                            </span>
-                          </div>
+              <div className="glass-panel rounded-3xl p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border border-white/10 bg-white/60 dark:bg-white/5 backdrop-blur-xl shadow-lg shadow-purple-900/20">
+                  <div className="flex items-center gap-3">
+                      <span className="text-xs font-semibold px-3 py-1.5 rounded-full bg-white text-[#9b01ec] shadow-sm border border-[#e9d5ff] dark:bg-[#9b01ec]/20 dark:text-[#d8b4fe] dark:border-[#9b01ec]/30">
+                          Plano {activePlan}
+                      </span>
+                      <div className="flex flex-col sm:flex-row sm:items-center sm:gap-2 text-gray-800 dark:text-slate-100">
+                        <span className="text-sm font-semibold leading-tight">
+                          Leads no mês: {Number.isFinite(planRules.leadLimit) ? `${leadsCreatedThisMonth(leads)}/${planRules.leadLimit}` : `${leadsCreatedThisMonth(leads)} / ilimitado`}
+                        </span>
+                        <span className="text-[11px] uppercase tracking-[0.2em] text-emerald-600 font-semibold bg-emerald-50/80 border border-emerald-100 px-2.5 py-1 rounded-full dark:bg-emerald-400/10 dark:text-emerald-200 dark:border-emerald-500/30 shadow-sm">
+                          CRM Inteligente
+                        </span>
                       </div>
-                      {!Number.isFinite(planRules.leadLimit) ? (
-                          <span className="text-xs text-emerald-700 font-semibold">Limite ilimitado</span>
-                      ) : (
-                          <span className="text-xs text-gray-500 flex items-center gap-2">
-                            <span className="inline-flex h-2.5 w-2.5 rounded-full bg-amber-400 animate-pulse shadow-[0_0_0_6px_rgba(251,191,36,0.18)]" />
-                            Ultrapassou o limite? Faça upgrade para liberar mais leads.
-                          </span>
-                      )}
                   </div>
+                  {!Number.isFinite(planRules.leadLimit) ? (
+                      <span className="text-xs text-emerald-700 dark:text-emerald-200 font-semibold bg-emerald-50/80 dark:bg-emerald-400/10 px-3 py-1 rounded-full border border-emerald-100 dark:border-emerald-500/30 shadow-sm">
+                        Limite ilimitado
+                      </span>
+                  ) : (
+                      <span className="text-xs text-gray-600 dark:text-slate-200 flex items-center gap-2 bg-white/70 dark:bg-white/5 px-3 py-1.5 rounded-full border border-white/60 dark:border-white/10 shadow-sm">
+                        <span className="inline-flex h-2.5 w-2.5 rounded-full bg-amber-400 animate-pulse shadow-[0_0_0_6px_rgba(251,191,36,0.18)]" />
+                        Ultrapassou o limite? Faça upgrade para liberar mais leads.
+                      </span>
+                  )}
               </div>
           </div>
           <header className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
               <div>
                 <p className="text-xs uppercase tracking-[0.3em] text-gray-400 font-semibold">Painel</p>
                 <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-gray-800">
-                    {currentView === 'map' ? 'Mapa Inteligente' : currentView === 'settings' ? 'Configurações' : currentView === 'email-automation' ? 'Automação' : currentView}
+                {currentView === 'map' ? 'Mapa Inteligente' : currentView === 'settings' ? 'Configurações' : currentView === 'email-automation' ? 'Automação' : currentView === 'calendar' ? 'Calendário' : currentView}
                 </h1>
               </div>
               <div className="flex items-center gap-2">
@@ -812,10 +850,6 @@ const App: React.FC = () => {
                 >
                   {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
                   {theme === 'dark' ? 'Modo Claro' : 'Modo Escuro'}
-                </button>
-                <button className="neon-cta text-sm">
-                  ✦ Gerar Site
-                  <span className="moving-line" aria-hidden="true" />
                 </button>
               </div>
           </header>

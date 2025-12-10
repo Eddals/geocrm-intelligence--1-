@@ -309,19 +309,19 @@ const Discovery: React.FC<DiscoveryProps> = ({ addLeads, openAiKey, setDiscovery
         <div className="bg-white p-1 rounded-2xl shadow-sm border border-gray-200 flex gap-2">
             <button
                 onClick={() => setActiveTab('ai')}
-                className={`px-6 py-2 rounded-xl text-sm font-semibold transition-all ${activeTab === 'ai' ? 'bg-indigo-600 text-white shadow-sm' : 'text-gray-600 hover:bg-gray-50'}`}
+                className={`px-6 py-2 rounded-xl text-sm font-semibold transition-all ${activeTab === 'ai' ? 'glass-purple text-white' : 'text-gray-600 hover:bg-gray-50 dark:text-slate-300 dark:hover:bg-white/10'}`}
             >
                 Busca Automática
             </button>
             <button
                 onClick={() => setActiveTab('scraper')}
-                className={`px-6 py-2 rounded-xl text-sm font-semibold transition-all flex items-center gap-2 ${activeTab === 'scraper' ? 'bg-indigo-600 text-white shadow-sm' : 'text-gray-600 hover:bg-gray-50'}`}
+                className={`px-6 py-2 rounded-xl text-sm font-semibold transition-all flex items-center gap-2 ${activeTab === 'scraper' ? 'glass-purple text-white' : 'text-gray-600 hover:bg-gray-50 dark:text-slate-300 dark:hover:bg-white/10'}`}
             >
                 Extração por Site
             </button>
             <button
                 onClick={() => setActiveTab('manual')}
-                className={`px-6 py-2 rounded-xl text-sm font-semibold transition-all ${activeTab === 'manual' ? 'bg-indigo-600 text-white shadow-sm' : 'text-gray-600 hover:bg-gray-50'}`}
+                className={`px-6 py-2 rounded-xl text-sm font-semibold transition-all ${activeTab === 'manual' ? 'glass-purple text-white' : 'text-gray-600 hover:bg-gray-50 dark:text-slate-300 dark:hover:bg-white/10'}`}
             >
                 Manual
             </button>
@@ -329,9 +329,8 @@ const Discovery: React.FC<DiscoveryProps> = ({ addLeads, openAiKey, setDiscovery
       </div>
 
       {activeTab === 'ai' && (
-        <div className="grid grid-cols-1 xl:grid-cols-12 gap-8 items-start">
-          <div className="bg-white rounded-3xl shadow-sm border border-gray-100 mb-8 animate-fade-in xl:col-span-5 w-full p-1">
-            {/* Header - CLEAN STYLE */}
+        <div className="flex flex-col gap-8 items-center">
+          <div className="glass-panel rounded-3xl animate-fade-in w-full max-w-6xl p-1">
             <div className="flex items-center gap-5 border-b border-gray-100 p-6 rounded-t-2xl">
                 <div>
                     <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
@@ -342,27 +341,26 @@ const Discovery: React.FC<DiscoveryProps> = ({ addLeads, openAiKey, setDiscovery
                 </div>
             </div>
 
-            <form onSubmit={handleSearch} className="p-6 space-y-4">
-              <div className="space-y-4">
-                {/* Search Query */}
-                <div className="relative">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4 pointer-events-none" />
-                    <input
-                    type="text"
-                    placeholder="Ex: Startups, Clínicas..."
-                    className="w-full pl-9 pr-4 py-3 border border-gray-200 rounded-xl bg-transparent text-gray-900 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all placeholder-gray-400"
-                    value={query}
-                    onChange={(e) => setQuery(e.target.value)}
-                    />
-                </div>
+            <form onSubmit={handleSearch} className="p-6 space-y-5">
+              {/* Search Query */}
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4 pointer-events-none" />
+                <input
+                  type="text"
+                  placeholder="Ex: Startups, Clínicas..."
+                  className="w-full pl-9 pr-4 py-3 border border-gray-200 rounded-xl bg-transparent text-gray-900 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all placeholder-gray-400"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                />
+              </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                {/* Country Selector - Custom Dropdown */}
+              {/* Region filters laid out horizontally */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
                 <div className="relative" ref={countryRef}>
                     <button
                         type="button"
                         onClick={() => setIsCountryOpen(!isCountryOpen)}
-                        className="w-full px-3 py-3 border border-gray-200 rounded-xl bg-white text-gray-900 focus:ring-2 focus:ring-indigo-500 outline-none transition-all flex items-center justify-between text-sm"
+                        className="w-full px-3 py-3 border border-gray-200 dark:border-white/10 rounded-xl bg-white dark:bg-slate-900/70 text-gray-900 dark:text-slate-100 focus:ring-2 focus:ring-indigo-500 outline-none transition-all flex items-center justify-between text-sm"
                     >
                         <div className="flex items-center gap-1.5 min-w-0">
                             <img src={LOCATIONS[country].flag} alt={country} className="w-4 h-auto rounded-sm flex-shrink-0" />
@@ -390,28 +388,30 @@ const Discovery: React.FC<DiscoveryProps> = ({ addLeads, openAiKey, setDiscovery
                         </div>
                     )}
                 </div>
-                
-                {/* State Selector - Custom Dropdown */}
                 <div className="relative" ref={regionRef}>
                     <button
                         type="button"
                         onClick={() => setIsRegionOpen(!isRegionOpen)}
-                        className="w-full px-3 py-3 border border-gray-200 rounded-xl bg-white text-gray-900 focus:ring-2 focus:ring-indigo-500 outline-none transition-all flex items-center justify-between text-left text-sm"
+                        className="w-full px-3 py-3 border border-gray-200 dark:border-white/10 rounded-xl bg-white dark:bg-slate-900/70 text-gray-900 dark:text-slate-100 focus:ring-2 focus:ring-indigo-500 outline-none transition-all flex items-center justify-between text-left text-sm"
                     >
-                        <span className={`text-sm truncate ${!region ? 'text-gray-500' : 'text-gray-900'}`}>
+                        <span className={`text-sm truncate ${!region ? 'text-gray-500 dark:text-slate-400' : 'text-gray-900 dark:text-slate-100'}`}>
                             {region || "Estado"}
                         </span>
                         <ChevronDown className={`w-3 h-3 text-gray-400 transition-transform flex-shrink-0 ${isRegionOpen ? 'rotate-180' : ''}`} />
                     </button>
 
                     {isRegionOpen && (
-                        <div className="absolute top-full left-0 w-full mt-1 bg-white border border-gray-200 rounded-xl shadow-lg z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-100 max-h-60 overflow-y-auto custom-scrollbar">
+                        <div className="absolute top-full left-0 w-full mt-1 bg-white/95 dark:bg-slate-900/95 border border-gray-200 dark:border-slate-700 rounded-xl shadow-lg z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-100 max-h-60 overflow-y-auto custom-scrollbar">
                             <div
                                 onClick={() => {
                                     setRegion('');
                                     setIsRegionOpen(false);
                                 }}
-                                className={`px-4 py-2.5 hover:bg-gray-50 cursor-pointer text-sm transition-colors ${!region ? 'bg-indigo-50 text-indigo-700 font-medium' : 'text-gray-700'}`}
+                                className={`px-4 py-2.5 cursor-pointer text-sm transition-colors ${
+                                    !region
+                                    ? 'bg-indigo-50 text-indigo-700 font-medium dark:bg-indigo-900/40 dark:text-indigo-100'
+                                    : 'text-gray-700 dark:text-slate-100 hover:bg-indigo-50 hover:text-indigo-700 dark:hover:bg-indigo-900/30 dark:hover:text-white'
+                                }`}
                             >
                                 Estado (Todos)
                             </div>
@@ -422,7 +422,11 @@ const Discovery: React.FC<DiscoveryProps> = ({ addLeads, openAiKey, setDiscovery
                                         setRegion(s);
                                         setIsRegionOpen(false);
                                     }}
-                                    className={`px-4 py-2.5 hover:bg-gray-50 cursor-pointer text-sm transition-colors ${region === s ? 'bg-indigo-50 text-indigo-700 font-medium' : 'text-gray-700'}`}
+                                    className={`px-4 py-2.5 cursor-pointer text-sm transition-colors ${
+                                        region === s
+                                        ? 'bg-indigo-50 text-indigo-700 font-medium dark:bg-indigo-900/40 dark:text-indigo-100'
+                                        : 'text-gray-700 dark:text-slate-100 hover:bg-indigo-50 hover:text-indigo-700 dark:hover:bg-indigo-900/30 dark:hover:text-white'
+                                    }`}
                                 >
                                     {s}
                                 </div>
@@ -430,8 +434,6 @@ const Discovery: React.FC<DiscoveryProps> = ({ addLeads, openAiKey, setDiscovery
                         </div>
                     )}
                 </div>
-
-                {/* City Input */}
                 <div className="relative">
                     <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4 pointer-events-none" />
                     <input
@@ -442,41 +444,49 @@ const Discovery: React.FC<DiscoveryProps> = ({ addLeads, openAiKey, setDiscovery
                     onChange={(e) => setCity(e.target.value)}
                     />
                 </div>
+                <div className="relative">
+                    <input
+                        type="text"
+                        placeholder="Nicho (ex: Clínicas de Estética, Restaurantes...)"
+                        className="w-full px-3 py-3 border border-gray-200 rounded-xl bg-transparent text-gray-900 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all"
+                        value={industry}
+                        onChange={(e) => setIndustry(e.target.value)}
+                    />
                 </div>
               </div>
 
-              {/* Row 2: Reputation Filter as Buttons */}
-              <div>
-                  <label className="text-xs font-bold text-gray-500 uppercase mb-2 block flex items-center gap-1">
-                      <Star className="w-4 h-4 text-yellow-500" /> Reputação
-                  </label>
-                  <div className="flex flex-wrap gap-2">
-                      {RATING_OPTIONS.map((opt) => (
-                          <button
-                              key={opt.value}
-                              type="button"
-                              onClick={() => setRatingFilter(opt.value)}
-                              className={`px-4 py-2 rounded-lg text-xs font-medium border transition-all ${
-                                  ratingFilter === opt.value
-                                  ? 'bg-indigo-50 text-indigo-700 border-indigo-200 shadow-sm ring-1 ring-indigo-300'
-                                  : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
-                              }`}
-                          >
-                              {opt.label}
-                          </button>
-                      ))}
+              {/* Reputation + action aligned */}
+              <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
+                  <div className="flex-1">
+                      <label className="text-xs font-bold text-gray-500 uppercase mb-2 block flex items-center gap-1">
+                          <Star className="w-4 h-4 text-yellow-500" /> Reputação
+                      </label>
+                      <div className="flex flex-wrap gap-2">
+                          {RATING_OPTIONS.map((opt) => (
+                              <button
+                                  key={opt.value}
+                                  type="button"
+                                  onClick={() => setRatingFilter(opt.value)}
+                                  className={`px-4 py-2 rounded-lg text-xs font-medium border transition-all ${
+                                      ratingFilter === opt.value
+                                      ? 'glass-purple text-white border-transparent shadow-sm'
+                                      : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
+                                  }`}
+                              >
+                                  {opt.label}
+                              </button>
+                          ))}
+                      </div>
                   </div>
-              </div>
-
-              {/* Row 3: Action Button */}
-              <div className="mt-2">
+                  <div className="w-full lg:w-auto">
                      <button
                         type="submit"
                         disabled={isLoading || !query || !city}
-                        className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 text-white px-4 py-3 rounded-xl font-semibold transition-all flex items-center justify-center gap-2 shadow-lg shadow-indigo-100"
+                        className="glass-purple w-full lg:w-auto disabled:opacity-60 text-white px-6 py-3 rounded-xl font-semibold transition-all flex items-center justify-center gap-2 shadow-lg shadow-indigo-100"
                     >
                         {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Buscar'}
                     </button>
+                  </div>
               </div>
 
                {/* Industry Tags Selection */}
@@ -490,7 +500,7 @@ const Discovery: React.FC<DiscoveryProps> = ({ addLeads, openAiKey, setDiscovery
                           onClick={() => setIndustry('')}
                           className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
                               industry === '' 
-                              ? 'bg-indigo-50 text-indigo-700 border-indigo-200' 
+                              ? 'glass-purple text-white border-transparent' 
                               : 'bg-white text-gray-600 border-gray-200 hover:border-indigo-300'
                           }`}
                           >
@@ -503,7 +513,7 @@ const Discovery: React.FC<DiscoveryProps> = ({ addLeads, openAiKey, setDiscovery
                               onClick={() => handleIndustrySelect(ind)}
                               className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
                                   industry === ind 
-                                  ? 'bg-indigo-50 text-indigo-700 border-indigo-200' 
+                                  ? 'glass-purple text-white border-transparent' 
                                   : 'bg-white text-gray-600 border-gray-200 hover:border-indigo-300'
                               }`}
                           >
@@ -548,7 +558,7 @@ const Discovery: React.FC<DiscoveryProps> = ({ addLeads, openAiKey, setDiscovery
                               <ChevronDown className={`w-3 h-3 transition-transform ${isSortOpen ? 'rotate-180' : ''}`} />
                             </button>
                             {isSortOpen && (
-                              <div className="absolute z-20 mt-1 w-40 bg-white border border-gray-200 rounded-lg shadow-lg max-h-40 overflow-y-auto">
+                              <div className="absolute z-20 mt-1 w-44 glass-panel bg-white/95 dark:bg-slate-900/95 border border-gray-200 dark:border-white/10 rounded-lg shadow-lg max-h-48 overflow-y-auto custom-scrollbar">
                                 {[
                                   { id: 'relevance', label: 'Relevância' },
                                   { id: 'rating', label: 'Reputação' },
@@ -557,7 +567,11 @@ const Discovery: React.FC<DiscoveryProps> = ({ addLeads, openAiKey, setDiscovery
                                   <div
                                     key={opt.id}
                                     onClick={() => { setSortBy(opt.id as any); setIsSortOpen(false); }}
-                                    className={`px-3 py-2 cursor-pointer hover:bg-indigo-50 ${sortBy === opt.id ? 'text-indigo-700 font-semibold' : 'text-gray-700'}`}
+                                    className={`px-4 py-2 cursor-pointer transition-colors ${
+                                      sortBy === opt.id
+                                      ? 'bg-indigo-50 text-indigo-700 font-semibold dark:bg-indigo-900/40 dark:text-indigo-100'
+                                      : 'text-gray-700 dark:text-slate-100 hover:bg-indigo-50 hover:text-indigo-700 dark:hover:bg-indigo-900/30 dark:hover:text-white'
+                                    }`}
                                   >
                                     {opt.label}
                                   </div>
@@ -608,8 +622,8 @@ const Discovery: React.FC<DiscoveryProps> = ({ addLeads, openAiKey, setDiscovery
                     onClick={() => toggleSelection(idx)}
                     className={`cursor-pointer group relative p-5 rounded-xl border transition-all duration-200 ${
                         selectedIndices.includes(idx) 
-                        ? 'bg-indigo-50 border-indigo-500 shadow-md ring-1 ring-indigo-500' 
-                        : 'bg-white border-gray-200 hover:border-indigo-300 hover:shadow-md'
+                        ? 'glass-purple text-white border-transparent shadow-lg ring-1 ring-indigo-400/70' 
+                        : 'glass-panel border-white/10 dark:border-white/10 bg-white/80 dark:bg-white/5 hover:border-indigo-300/70 hover:shadow-md'
                     }`}
                   >
                     <div className="flex items-start justify-between mb-2">
@@ -621,14 +635,14 @@ const Discovery: React.FC<DiscoveryProps> = ({ addLeads, openAiKey, setDiscovery
                         )}
                     </div>
                     <div className="mb-2">
-                        <h4 className="font-bold text-gray-800 text-lg leading-tight">{lead.company}</h4>
+                        <h4 className="font-bold text-gray-800 dark:text-slate-100 text-lg leading-tight">{lead.company}</h4>
                          <div className="mt-1 flex items-center gap-2">
                             {renderStars(lead.rating || 0)}
-                            <span className="text-[10px] text-gray-400 font-medium">
+                            <span className="text-[10px] text-gray-400 dark:text-slate-300 font-medium">
                                 {lead.rating ? lead.rating.toFixed(1) : ''}
                             </span>
                             {lead.value ? (
-                              <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100">
+                              <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 dark:bg-emerald-500/20 px-2 py-0.5 rounded-full border border-emerald-100 dark:border-emerald-500/40">
                                 ${lead.value.toLocaleString()}
                               </span>
                             ) : null}
@@ -636,32 +650,32 @@ const Discovery: React.FC<DiscoveryProps> = ({ addLeads, openAiKey, setDiscovery
                     </div>
                     
                     {(isValid(lead.name) || isValid(lead.contactRole)) && (
-                        <p className="text-sm font-medium text-gray-700 flex items-center gap-2 mb-2">
-                            <User className="w-4 h-4 text-indigo-600" />
+                        <p className="text-sm font-medium text-gray-700 dark:text-slate-200 flex items-center gap-2 mb-2">
+                            <User className="w-4 h-4 text-indigo-600 dark:text-indigo-300" />
                             {lead.name}
-                            {isValid(lead.contactRole) && <span className="text-xs text-gray-500">• {lead.contactRole}</span>}
+                            {isValid(lead.contactRole) && <span className="text-xs text-gray-500 dark:text-slate-300">• {lead.contactRole}</span>}
                         </p>
                     )}
 
-                    <p className="text-sm text-gray-500 flex items-center gap-1 mb-3">
+                    <p className="text-sm text-gray-500 dark:text-slate-300 flex items-center gap-1 mb-3">
                         <MapPin className="w-3 h-3" /> {isValid(lead.address) ? `${lead.address}, ${lead.city}` : lead.city}
                     </p>
 
                     {isValid(lead.notes || lead.description) && (
-                      <p className="text-xs text-gray-600 mb-3 italic line-clamp-2">
+                      <p className="text-xs text-gray-600 dark:text-slate-200/80 mb-3 italic line-clamp-2">
                         {lead.notes || lead.description}
                       </p>
                     )}
 
                     {(isValid(lead.website) || isValid(lead.linkedin) || isValid(lead.instagram) || isValid(lead.facebook)) ? (
-                        <div className="flex gap-2 pt-3 border-t border-gray-100">
+                        <div className="flex gap-2 pt-3 border-t border-gray-100 dark:border-white/10">
                             {isValid(lead.website) && (
                                 <a 
                                     href={lead.website} 
                                     target="_blank" 
                                     rel="noopener noreferrer" 
                                     onClick={(e) => e.stopPropagation()}
-                                    className="text-gray-400 hover:text-indigo-600 transition-colors p-1 hover:bg-indigo-50 rounded"
+                                    className="text-gray-400 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-indigo-200 transition-colors p-1 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 rounded"
                                     title="Website"
                                 >
                                     <Globe className="w-4 h-4" />
@@ -673,7 +687,7 @@ const Discovery: React.FC<DiscoveryProps> = ({ addLeads, openAiKey, setDiscovery
                                     target="_blank" 
                                     rel="noopener noreferrer" 
                                     onClick={(e) => e.stopPropagation()}
-                                    className="text-gray-400 hover:text-blue-600 transition-colors p-1 hover:bg-blue-50 rounded"
+                                    className="text-gray-400 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-200 transition-colors p-1 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded"
                                     title="LinkedIn"
                                 >
                                     <Linkedin className="w-4 h-4" />
@@ -685,7 +699,7 @@ const Discovery: React.FC<DiscoveryProps> = ({ addLeads, openAiKey, setDiscovery
                                     target="_blank" 
                                     rel="noopener noreferrer" 
                                     onClick={(e) => e.stopPropagation()}
-                                    className="text-gray-400 hover:text-pink-600 transition-colors p-1 hover:bg-pink-50 rounded"
+                                    className="text-gray-400 dark:text-slate-300 hover:text-pink-600 dark:hover:text-pink-200 transition-colors p-1 hover:bg-pink-50 dark:hover:bg-pink-900/30 rounded"
                                     title="Instagram"
                                 >
                                     <Instagram className="w-4 h-4" />
@@ -697,7 +711,7 @@ const Discovery: React.FC<DiscoveryProps> = ({ addLeads, openAiKey, setDiscovery
                                     target="_blank" 
                                     rel="noopener noreferrer" 
                                     onClick={(e) => e.stopPropagation()}
-                                    className="text-gray-400 hover:text-blue-700 transition-colors p-1 hover:bg-blue-50 rounded"
+                                    className="text-gray-400 dark:text-slate-300 hover:text-blue-700 dark:hover:text-blue-200 transition-colors p-1 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded"
                                     title="Facebook"
                                 >
                                     <Facebook className="w-4 h-4" />
@@ -705,7 +719,7 @@ const Discovery: React.FC<DiscoveryProps> = ({ addLeads, openAiKey, setDiscovery
                             )}
                         </div>
                     ) : (
-                        <p className="text-[10px] text-gray-400 italic pt-2 border-t border-gray-100">Redes sociais não disponíveis</p>
+                        <p className="text-[10px] text-gray-400 dark:text-slate-400 italic pt-2 border-t border-gray-100 dark:border-white/10">Redes sociais não disponíveis</p>
                     )}
                   </div>
                 ))}
@@ -716,14 +730,14 @@ const Discovery: React.FC<DiscoveryProps> = ({ addLeads, openAiKey, setDiscovery
       )}
 
       {activeTab === 'scraper' && (
-        <div className="max-w-3xl mx-auto w-full bg-white rounded-2xl shadow-sm border border-gray-200 p-8 animate-fade-in">
+        <div className="max-w-3xl mx-auto w-full glass-panel rounded-2xl p-8 animate-fade-in">
            <div className="text-center mb-8">
                <h3 className="font-bold text-xl text-gray-800 mb-2 flex items-center justify-center gap-2">
                     <Sparkles className="w-6 h-6 text-indigo-600" />
-                    Extração & Qualificação (Perplexity IA)
+                    Extração & Qualificação (Mapa Inteligente)
                 </h3>
                 <p className="text-sm text-gray-500 max-w-lg mx-auto">
-                    Insira o site. Nossa IA analisará a página para extrair contatos, redes sociais e 
+                    Insira o site. Vamos analisar a página para extrair contatos, redes sociais e 
                     <strong> qualificar o lead</strong> (status, profissionalismo, nicho e poder de compra).
                 </p>
            </div>
@@ -743,7 +757,7 @@ const Discovery: React.FC<DiscoveryProps> = ({ addLeads, openAiKey, setDiscovery
                <button 
                 type="submit"
                 disabled={isLoading || !targetUrl}
-                className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-xl font-semibold transition-all flex items-center gap-2 disabled:opacity-50"
+                className="glass-purple text-white px-6 py-3 rounded-xl font-semibold transition-all flex items-center gap-2 disabled:opacity-50"
                >
                    {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Analisar Site'}
                </button>
@@ -761,7 +775,7 @@ const Discovery: React.FC<DiscoveryProps> = ({ addLeads, openAiKey, setDiscovery
                             <div>
                                 <h4 className="font-bold text-red-700 text-lg">⚠️ Lead Fraco Detectado</h4>
                                 <p className="text-sm text-red-600 mt-1">
-                                    Não encontramos email ou telefone explícitos. A IA pode ter qualificado o site, mas o contato direto é difícil.
+                                    Não encontramos email ou telefone explícitos. A análise pode ter qualificado o site, mas o contato direto é difícil.
                                 </p>
                             </div>
                        </div>
@@ -788,21 +802,21 @@ const Discovery: React.FC<DiscoveryProps> = ({ addLeads, openAiKey, setDiscovery
                            </button>
                            <button 
                             onClick={handleImportScraped}
-                            className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg font-medium flex items-center gap-2 shadow-sm"
+                            className="glass-purple text-white px-4 py-2 rounded-lg font-medium flex items-center gap-2 shadow-sm"
                            >
                                <Download className="w-4 h-4" /> Importar Lead
                            </button>
                        </div>
                    </div>
 
-                   <div className="grid grid-cols-2 gap-6 bg-white p-4 rounded-lg border border-gray-100 shadow-sm mb-4">
+                   <div className="grid grid-cols-2 gap-6 glass-panel bg-white/5 dark:bg-white/5 p-4 rounded-lg border border-gray-200 dark:border-white/10 shadow-sm mb-4">
                        <div className="space-y-3">
                            <div>
                                <p className="text-xs text-gray-500 font-bold uppercase">Email</p>
                                {isValid(scrapedLead.email) ? (
-                                <div className="flex items-center gap-2 text-gray-800 text-sm">
-                                   <Mail className="w-4 h-4 text-gray-400" /> 
-                                   <span className="text-gray-800">{scrapedLead.email}</span>
+                                <div className="flex items-center gap-2 text-gray-800 dark:text-slate-100 text-sm">
+                                   <Mail className="w-4 h-4 text-gray-400 dark:text-slate-300" /> 
+                                   <span className="text-gray-800 dark:text-slate-100">{scrapedLead.email}</span>
                                    <CheckCircle className="w-4 h-4 text-emerald-500" />
                                 </div>
                                ) : (
@@ -812,9 +826,9 @@ const Discovery: React.FC<DiscoveryProps> = ({ addLeads, openAiKey, setDiscovery
                            <div>
                                <p className="text-xs text-gray-500 font-bold uppercase">Telefone</p>
                                {isValid(scrapedLead.phone) ? (
-                                <div className="flex items-center gap-2 text-gray-800 text-sm">
-                                   <Phone className="w-4 h-4 text-gray-400" /> 
-                                   <span className="text-gray-800">{scrapedLead.phone}</span>
+                                <div className="flex items-center gap-2 text-gray-800 dark:text-slate-100 text-sm">
+                                   <Phone className="w-4 h-4 text-gray-400 dark:text-slate-300" /> 
+                                   <span className="text-gray-800 dark:text-slate-100">{scrapedLead.phone}</span>
                                 </div>
                                ) : (
                                    <p className="text-sm text-red-400 italic">Não encontrado</p>
@@ -825,10 +839,10 @@ const Discovery: React.FC<DiscoveryProps> = ({ addLeads, openAiKey, setDiscovery
                            {isValid(scrapedLead.city) && (
                                <div>
                                    <p className="text-xs text-gray-500 font-bold uppercase">Localização</p>
-                                    <div className="flex items-center gap-2 text-gray-800 text-sm">
-                                       <MapPin className="w-4 h-4 text-gray-400" /> {scrapedLead.city}
-                                       {isValid(scrapedLead.address) && <span className="text-xs text-gray-500 ml-1">({scrapedLead.address})</span>}
-                                   </div>
+                                    <div className="flex items-center gap-2 text-gray-800 dark:text-slate-100 text-sm">
+                                       <MapPin className="w-4 h-4 text-gray-400 dark:text-slate-300" /> {scrapedLead.city}
+                                       {isValid(scrapedLead.address) && <span className="text-xs text-gray-500 dark:text-slate-300 ml-1">({scrapedLead.address})</span>}
+                                    </div>
                                </div>
                            )}
                            {(isValid(scrapedLead.instagram) || isValid(scrapedLead.facebook) || isValid(scrapedLead.linkedin)) && (
@@ -846,11 +860,11 @@ const Discovery: React.FC<DiscoveryProps> = ({ addLeads, openAiKey, setDiscovery
 
                    {/* QUALIFICATION REPORT */}
                    {scrapedLead.notes && (
-                       <div className="bg-indigo-50/50 rounded-lg border border-indigo-100 p-4">
-                           <h4 className="text-sm font-bold text-indigo-900 mb-2 flex items-center gap-2">
-                               <Sparkles className="w-4 h-4 text-indigo-600" /> Relatório de Qualificação (Perplexity)
+                       <div className="glass-panel bg-white/5 dark:bg-white/5 rounded-lg border border-indigo-100/60 dark:border-white/10 p-4 shadow-sm">
+                           <h4 className="text-sm font-bold text-indigo-900 dark:text-indigo-200 mb-2 flex items-center gap-2">
+                               <Sparkles className="w-4 h-4 text-indigo-600 dark:text-indigo-300" /> Relatório de Qualificação (Mapa Inteligente)
                            </h4>
-                           <div className="text-sm text-gray-700 whitespace-pre-line leading-relaxed">
+                           <div className="text-sm text-gray-700 dark:text-slate-100 whitespace-pre-line leading-relaxed">
                                {scrapedLead.notes}
                            </div>
                        </div>
@@ -862,7 +876,7 @@ const Discovery: React.FC<DiscoveryProps> = ({ addLeads, openAiKey, setDiscovery
 
       {/* Manual Tab */}
       {activeTab === 'manual' && (
-        <div className="max-w-3xl mx-auto w-full bg-white rounded-2xl shadow-sm border border-gray-200 p-8 animate-fade-in">
+        <div className="max-w-3xl mx-auto w-full glass-panel rounded-2xl p-8 animate-fade-in">
              <h3 className="font-bold text-xl text-gray-800 mb-6 flex items-center gap-2 pb-4 border-b border-gray-100">
                 <PlusCircleIcon className="w-6 h-6 text-indigo-600" />
                 Cadastro Manual de Lead
@@ -979,7 +993,7 @@ const Discovery: React.FC<DiscoveryProps> = ({ addLeads, openAiKey, setDiscovery
                 <div className="pt-4 border-t border-gray-100 flex justify-end">
                     <button
                         type="submit"
-                        className="bg-indigo-600 hover:bg-indigo-700 text-white px-8 py-3 rounded-xl font-semibold shadow-lg shadow-indigo-100 transition-all flex items-center gap-2"
+                        className="glass-purple text-white px-8 py-3 rounded-xl font-semibold shadow-lg shadow-indigo-100 transition-all flex items-center gap-2"
                     >
                         <PlusCircleIcon className="w-5 h-5" />
                         Cadastrar Lead

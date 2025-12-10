@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { LayoutDashboard, Map, KanbanSquare, Search, Settings, LogOut, Mail } from 'lucide-react';
+import { LayoutDashboard, Map, KanbanSquare, Search, Settings, LogOut, Mail, CalendarCheck2 } from 'lucide-react';
 import { ViewMode } from '../types';
 
 interface SidebarProps {
@@ -26,6 +26,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, setView, onLogout }) => 
     { id: 'map', label: 'Mapa Inteligente', icon: Map },
     { id: 'pipeline', label: 'CRM Pipeline', icon: KanbanSquare },
     { id: 'discovery', label: 'Captação de Leads', icon: Search },
+    { id: 'calendar', label: 'Calendário', icon: CalendarCheck2 },
     { id: 'email-automation', label: 'Automação Email', icon: Mail },
   ];
 
@@ -53,7 +54,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, setView, onLogout }) => 
           <img 
             src="https://i.imgur.com/HkMra5d.png" 
             alt="GeoCRM Logo" 
-            className="h-24 w-auto object-contain animate-in slide-in-from-left duration-700 hover:scale-105 transition-transform"
+            className="h-28 md:h-32 w-auto object-contain animate-in slide-in-from-left duration-700 hover:scale-105 transition-transform drop-shadow-lg"
           />
         </div>
 
@@ -65,13 +66,13 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, setView, onLogout }) => 
               <button
                 key={item.id}
                 onClick={() => { setView(item.id as ViewMode); setIsOpen(false); }}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all duration-200
+                className={`group w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all duration-200
                   ${isActive 
-                    ? 'bg-[#9b01ec]/10 text-[#9b01ec] shadow-sm ring-1 ring-[#9b01ec]/20' 
-                    : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                    ? 'bg-[#f3e8ff] text-[#9b01ec] border border-[#e9d5ff] shadow-sm dark:bg-[#9b01ec]/20 dark:text-[#d8b4fe] dark:border-transparent' 
+                    : 'text-gray-600 hover:bg-gray-50 hover:text-[#9b01ec] dark:text-slate-300 dark:hover:bg-white/10 dark:hover:text-[#d8b4fe]'
                   }`}
               >
-                <Icon className={`w-5 h-5 ${isActive ? 'text-[#9b01ec]' : 'text-gray-400'}`} />
+                <Icon className={`w-5 h-5 ${isActive ? 'text-[#9b01ec] dark:text-[#d8b4fe]' : 'text-gray-400 dark:text-slate-400'} group-hover:text-[#9b01ec] dark:group-hover:text-[#d8b4fe]`} />
                 {item.label}
               </button>
             );
@@ -82,13 +83,13 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, setView, onLogout }) => 
           
           <button
             onClick={() => { setView('settings'); setIsOpen(false); }}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all duration-200
+            className={`group w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all duration-200
               ${currentView === 'settings' 
-                ? 'bg-[#9b01ec]/10 text-[#9b01ec]' 
-                : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                ? 'bg-[#f3e8ff] text-[#9b01ec] border border-[#e9d5ff] dark:bg-[#9b01ec]/20 dark:text-[#d8b4fe] dark:border-transparent' 
+                : 'text-gray-600 hover:bg-gray-50 hover:text-[#9b01ec] dark:text-slate-300 dark:hover:bg-white/10 dark:hover:text-[#d8b4fe]'
               }`}
           >
-            <Settings className={`w-5 h-5 ${currentView === 'settings' ? 'text-[#9b01ec]' : 'text-gray-400'}`} />
+            <Settings className={`w-5 h-5 ${currentView === 'settings' ? 'text-[#9b01ec] dark:text-[#d8b4fe]' : 'text-gray-400 dark:text-slate-400'} group-hover:text-[#9b01ec] dark:group-hover:text-[#d8b4fe]`} />
             Configurações
           </button>
 

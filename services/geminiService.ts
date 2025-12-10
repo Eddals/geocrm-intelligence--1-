@@ -1,6 +1,6 @@
 
-import { GoogleGenAI, Type } from "@google/genai";
-import { Lead, PipelineStage } from '../types';
+import { GoogleGenAI, Type, Modality } from "@google/genai";
+import { Lead, PipelineStage, ChatMessage } from '../types';
 import { isValidEmail, isValidPhone, formatPhone } from '../utils/validators';
 
 const getAI = () => {
@@ -335,4 +335,179 @@ export const rankLeadsForEmailCampaign = async (leads: Lead[]): Promise<{id: str
     } catch(e) {
         return [];
     }
+};
+
+// --- Chat Assistant (DevtoneLead IA) ---
+const jsonPartFrom = (text: string) => {
+    const firstBracket = text.indexOf('[');
+    const lastBracket = text.lastIndexOf(']');
+    if (firstBracket !== -1 && lastBracket !== -1 && lastBracket > firstBracket) {
+        return text.substring(firstBracket, lastBracket + 1);
+    }
+    return '';
+};
+
+// TTS removed with chatbox removal
+
+export const sendMessageToGemini = async (
+  userText: string,
+  history: ChatMessage[],
+  onAddLeads?: (leads: Partial<Lead>[]) => void
+): Promise<string> => {
+  const ai = getAI();
+  const needsTool = /lead|leads|adicionar|buscar|encontrar|procurar/i.test(userText);
+  const nicheMatch = userText.match(/(construção|construction|limpeza|cleaning|agência|agencia|agency|estética|clinicas|clínicas|marketing|dentista|dentists|saúde|health|technology|tech|software)/i);
+  const locMatch = userText.match(/em\s+([A-Za-z\s]+)/i);
+
+  const generateLeadsWithGemini = async (location: string, niche: string, quantity: number = 5): Promise<Partial<Lead>[]> => {
+    const prompt = `
+      Gere ${quantity} leads B2B reais e verossímeis no nicho "${niche}" em "${location}".
+      Retorne APENAS JSON (array) com campos:
+      [
+        {
+          "company": "Nome da empresa",
+          "name": "Contato",
+          "phone": "+55 ... ou +1 ...",
+          "email": "email válido ou null",
+          "city": "Cidade/Estado",
+          "address": "Endereço",
+          "value": 5000,
+          "status": "Novo",
+          "source": "Chat IA"
+        }
+      ]
+      Não mencione IA; não invente links; se não souber, use null.
+    `;
+    try {
+      const response = await ai.models.generateContent({
+        model: "gemini-2.5-flash",
+        contents: prompt,
+        config: { responseMimeType: "application/json" }
+      });
+      const raw = safeJsonParse(response.text || "[]", true);
+      return (raw || []).map((l: any) => ({
+        company: l.company || l.nome || 'Empresa',
+        name: l.name || l.contato || 'Contato',
+        phone: l.phone || l.telefone || null,
+        email: l.email || null,
+        city: l.city || location,
+        address: l.address || '',
+        value: Number(l.value) || 5000,
+        status: l.status || PipelineStage.NEW,
+        source: l.source || 'Chat IA',
+      }));
+    } catch (e) {
+      console.error('Gemini lead generation error', e);
+      return [];
+    }
+  };
+
+  const fallbackLeads = (location: string, niche: string, quantity: number) =>
+    Array.from({ length: quantity }).map((_, idx) => ({
+      company: `${niche} ${location} ${idx + 1}`,
+      name: 'Contato',
+      phone: null,
+      email: null,
+      city: location,
+      address: '',
+      value: 5000,
+      status: PipelineStage.NEW,
+      source: 'Chat IA'
+    }));
+
+  const callTool = async () => {
+    try {
+      const body = {
+        industry: nicheMatch?.[0] || 'Geral',
+        location: locMatch?.[1]?.trim() || 'Brasil',
+        count: userText.match(/(\d+)/)?.[1] || 5
+      };
+      let leads = await generateLeadsWithGemini(body.location, body.industry, Number(body.count) || 5);
+      if (!leads || leads.length === 0) {
+        leads = fallbackLeads(body.location, body.industry, Number(body.count) || 5);
+      }
+      if (Array.isArray(leads) && leads.length > 0 && onAddLeads) {
+        await Promise.resolve(onAddLeads(leads));
+      }
+      const preview = leads.slice(0, 3).map((l: any) => l.company || l.nome || 'Lead').join(', ');
+      return `Adicionei ${leads.length} lead(s) de ${body.industry} em ${body.location}. Exemplos: ${preview || 'sem exemplos'}.`;
+    } catch (e) {
+      console.error('Tool search-leads error', e);
+      return 'Não consegui buscar leads agora.';
+    }
+  };
+  const systemInstruction = `Você é o assistente IA avançado do Devtone Leads. 
+Sua missão é ajudar usuários a captar leads qualificados nos EUA e Brasil (foco em construção, limpeza, agências).
+
+FERRAMENTAS:
+Você tem acesso à ferramenta 'search_leads'. SE O USUÁRIO PEDIR PARA ADICIONAR, BUSCAR OU ENCONTRAR LEADS de um lugar ou tipo específico, VOCÊ DEVE USAR ESSA FERRAMENTA IMEDIATAMENTE.
+
+COMPORTAMENTO:
+1. Se usar a ferramenta, aguarde a confirmação e depois diga ao usuário que os leads foram adicionados.
+2. Ao confirmar, liste brevemente as categorias ou empresas encontradas para mostrar valor.
+3. Seja proativo, profissional e entusiasta sobre o crescimento do negócio do usuário.
+4. Responda sempre em Português.
+Formato: responda de forma direta e curta. Não mencione ferramentas ou código. Se devolver leads, apenas confirme e cite 2-3 exemplos.`;
+
+  const compiledHistory = history.map(h => `${h.role === 'user' ? 'Usuário' : 'IA'}: ${h.text}`).join('\n');
+
+  const prompt = `
+${systemInstruction}
+
+Histórico:
+${compiledHistory}
+
+Usuário agora: "${userText}"
+Se gerar leads, devolva também um array JSON válido como:
+[{"company":"Nome","name":"Contato","phone":"+55...","email":"...","city":"...","address":"...","value":5000,"status":"Novo","source":"Chat IA"}]
+`;
+
+  try {
+    if (needsTool) {
+      return await callTool();
+    }
+
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents: prompt
+    });
+
+    const text = response.text || "Não consegui responder agora. Tente novamente.";
+
+    // Tentar extrair leads de um array JSON na resposta
+    const firstBracket = text.indexOf('[');
+    const lastBracket = text.lastIndexOf(']');
+    if (firstBracket !== -1 && lastBracket !== -1 && lastBracket > firstBracket) {
+        const jsonPart = text.substring(firstBracket, lastBracket + 1);
+        try {
+            const leads = JSON.parse(jsonPart);
+            if (Array.isArray(leads) && leads.length > 0 && onAddLeads) {
+                const normalized = leads.map((l: any) => ({
+                    company: l.company || l.nome || 'Empresa',
+                    name: l.name || l.contato || 'Contato',
+                    phone: l.phone || l.telefone || null,
+                    email: l.email || null,
+                    city: l.city || '',
+                    address: l.address || '',
+                    value: l.value || 0,
+                    status: l.status || PipelineStage.NEW,
+                    source: l.source || 'Chat IA',
+                    notes: l.notes,
+                    website: l.website,
+                    instagram: l.instagram,
+                    facebook: l.facebook,
+                    linkedin: l.linkedin
+                }));
+                onAddLeads(normalized);
+            }
+        } catch (e) {
+            console.warn('Falha ao parsear leads retornados pelo chat', e);
+        }
+    }
+
+    return text.replace(jsonPartFrom(text), '').trim() || text;
+  } catch (e) {
+    console.error('Erro no chat Gemini', e);
+    return "Não consegui responder agora. Tente novamente em instantes.";
+  }
 };

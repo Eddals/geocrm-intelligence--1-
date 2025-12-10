@@ -86,7 +86,7 @@ export const extractAndQualifyWithPerplexity = async (url: string): Promise<Part
     const validPhone = isValidPhone(parsedData.phone) ? formatPhone(parsedData.phone) : null;
 
     // Combine description with qualification notes for the final Lead Notes
-    const combinedNotes = `[Análise IA Perplexity]\n${parsedData.qualification_notes || 'Sem notas de qualificação'}\n\n[Sobre]\n${parsedData.description || 'Sem descrição'}`;
+    const combinedNotes = `[Análise Mapa Inteligente]\n${parsedData.qualification_notes || 'Sem notas de qualificação'}\n\n[Sobre]\n${parsedData.description || 'Sem descrição'}`;
 
     return {
         company: parsedData.company || "Empresa Desconhecida",

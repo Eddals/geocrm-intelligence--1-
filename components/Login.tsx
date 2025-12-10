@@ -14,12 +14,24 @@ const Login: React.FC<LoginProps> = ({ onLogin, onSwitchToRegister }) => {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
 
+  const hashPassword = async (value: string) => {
+    if (window.crypto?.subtle) {
+      const encoder = new TextEncoder();
+      const data = encoder.encode(value);
+      const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+      const hashArray = Array.from(new Uint8Array(hashBuffer));
+      return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    }
+    return value;
+  };
+
   const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setLoading(true);
     try {
-        const data = await supabaseRequest<any[]>('users', { query: `?email=eq.${encodeURIComponent(email)}&password=eq.${encodeURIComponent(password)}` });
+        const hashed = await hashPassword(password);
+        const data = await supabaseRequest<any[]>('users', { query: `?email=eq.${encodeURIComponent(email)}&password=eq.${encodeURIComponent(hashed)}` });
         const user = data && data[0];
         if (!user) {
             setError('Credenciais inválidas.');
@@ -33,7 +45,8 @@ const Login: React.FC<LoginProps> = ({ onLogin, onSwitchToRegister }) => {
             companyName: user.company_name,
             companySector: user.company_sector,
             businessSummary: user.business_summary,
-            userRole: user.user_role
+            userRole: user.user_role,
+            subscriptionPlan: user.plan || 'Start'
         });
     } catch (err: any) {
         setError('Erro ao autenticar. Verifique sua conexão.');

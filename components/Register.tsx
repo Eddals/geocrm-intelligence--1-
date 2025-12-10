@@ -31,6 +31,7 @@ const Register: React.FC<RegisterProps> = ({ onRegister, onSwitchToLogin }) => {
     const [regPassConfirm, setRegPassConfirm] = useState('');
     const [regSummary, setRegSummary] = useState('');
     const [regRole, setRegRole] = useState('Dono');
+    const [regPlan, setRegPlan] = useState<'Start' | 'Pro' | 'Growth' | 'Enterprise'>('Start');
     const [captchaVerified, setCaptchaVerified] = useState(false);
     const [isSectorOpen, setIsSectorOpen] = useState(false);
     const [isRoleOpen, setIsRoleOpen] = useState(false);
@@ -49,6 +50,17 @@ const Register: React.FC<RegisterProps> = ({ onRegister, onSwitchToLogin }) => {
         document.addEventListener("mousedown", handleClickOutside);
         return () => document.removeEventListener("mousedown", handleClickOutside);
     }, []);
+
+    const hashPassword = async (value: string) => {
+        if (window.crypto?.subtle) {
+            const encoder = new TextEncoder();
+            const data = encoder.encode(value);
+            const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+            const hashArray = Array.from(new Uint8Array(hashBuffer));
+            return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+        }
+        return value;
+    };
 
     const handleRegisterSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -72,14 +84,17 @@ const Register: React.FC<RegisterProps> = ({ onRegister, onSwitchToLogin }) => {
                 return;
             }
 
+            const hashedPass = await hashPassword(regPass);
+
             const payload = {
                 name: regName,
                 email: regEmail,
-                password: regPass,
+                password: hashedPass,
                 company_name: regCompany,
                 company_sector: regSector,
                 business_summary: regSummary,
-                user_role: regRole
+                user_role: regRole,
+                plan: regPlan
             };
 
             const created = await supabaseRequest<any[]>('users', { method: 'POST', body: payload, query: '' });
@@ -94,7 +109,8 @@ const Register: React.FC<RegisterProps> = ({ onRegister, onSwitchToLogin }) => {
                   companyName: newUser.company_name,
                   companySector: newUser.company_sector,
                   businessSummary: newUser.business_summary,
-                  userRole: newUser.user_role
+                  userRole: newUser.user_role,
+                  subscriptionPlan: newUser.plan || regPlan
               });
               setShowSplash(false);
             }, 5000);
@@ -190,6 +206,29 @@ const Register: React.FC<RegisterProps> = ({ onRegister, onSwitchToLogin }) => {
                                 ))}
                             </div>
                         )}
+                    </div>
+                </div>
+
+                <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wide">Plano</label>
+                    <select
+                      value={regPlan}
+                      onChange={(e) => setRegPlan(e.target.value as any)}
+                      className="w-full px-3 py-2.5 border border-gray-200 rounded-lg bg-gray-50/50 focus:bg-white focus:ring-2 focus:ring-[#9b01ec] focus:border-transparent outline-none transition-all text-sm text-gray-900"
+                    >
+                      <option value="Start">Start</option>
+                      <option value="Pro">Pro</option>
+                      <option value="Growth">Growth</option>
+                      <option value="Enterprise">Enterprise</option>
+                    </select>
+                    <div className="mt-2 text-[11px] text-gray-600 space-y-1 bg-gray-50 border border-gray-100 rounded-lg p-3">
+                        <p className="font-semibold text-gray-800">O que cada plano libera:</p>
+                        <ul className="list-disc pl-4 space-y-0.5">
+                            <li><span className="font-semibold">Start</span>: até 50 leads/mês, 1 automação básica, mapa liberado.</li>
+                            <li><span className="font-semibold">Pro</span>: até 200 leads/mês, 3 automações, enriquecimento de dados e automação de email.</li>
+                            <li><span className="font-semibold">Growth</span>: até 1000 leads/mês, 10 automações, recursos avançados completos.</li>
+                            <li><span className="font-semibold">Enterprise</span>: ilimitado, suporte dedicado e todos os recursos liberados.</li>
+                        </ul>
                     </div>
                 </div>
 

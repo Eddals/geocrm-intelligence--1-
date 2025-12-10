@@ -139,6 +139,7 @@ export interface AppSettings {
   companySector: string;
   businessSummary?: string;
   userRole?: string;
+  subscriptionPlan?: PlanTier;
   
   companyName: string;
   emailNotifications: boolean;
@@ -168,8 +169,16 @@ export interface Notification {
   type: 'success' | 'info' | 'warning';
 }
 
-export type ViewMode = 'dashboard' | 'pipeline' | 'map' | 'discovery' | 'email-automation' | 'settings';
+export interface ChatMessage {
+  id: string;
+  role: 'user' | 'model';
+  text: string;
+}
+
+export type ViewMode = 'dashboard' | 'pipeline' | 'map' | 'discovery' | 'email-automation' | 'settings' | 'calendar';
 
 export type EmailTone = 'formal' | 'friendly' | 'persuasive' | 'urgent' | 'consultative';
 
 export type EmailFocus = 'meeting' | 'sales' | 'followup' | 'case_study' | 'partnership';
+
+export type PlanTier = 'Start' | 'Pro' | 'Growth' | 'Enterprise';

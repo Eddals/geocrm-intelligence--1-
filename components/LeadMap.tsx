@@ -51,6 +51,7 @@ const LeadMap: React.FC<LeadMapProps> = ({ leads, discoveryResults = [], openAiK
   const mapInstanceRef = useRef<any>(null);
   const markersRef = useRef<any[]>([]);
   const heatLayerRef = useRef<any>(null);
+  const [tileError, setTileError] = useState(false);
   
   // Dropdown Refs
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -81,7 +82,6 @@ const LeadMap: React.FC<LeadMapProps> = ({ leads, discoveryResults = [], openAiK
   const [statusFilter, setStatusFilter] = useState<'all' | PipelineStage>('all');
   const [minValue, setMinValue] = useState<number>(0);
   const [tagFilter, setTagFilter] = useState<string>('');
-  const [showHeatmap, setShowHeatmap] = useState<boolean>(false);
 
   // Filter leads that have valid coordinates
   const validLeads = useMemo(() => leads.filter(l => l.lat !== 0 && l.lng !== 0), [leads]);
@@ -325,7 +325,7 @@ const LeadMap: React.FC<LeadMapProps> = ({ leads, discoveryResults = [], openAiK
                     ${!isGhost ? `
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 8px; padding-top: 8px; border-top: 1px solid #f3f4f6;">
                         <span style="background: ${color}20; color: ${color}; font-size: 10px; padding: 2px 6px; border-radius: 4px; font-weight: 600;">${lead.status}</span>
-                        <span style="font-weight: 700; color: #059669; font-size: 12px;">R$ ${(lead.value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                        <span style="font-weight: 700; color: #059669; font-size: 12px;">USD ${(lead.value || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
                     </div>
                     ` : `
                     <div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid #f3f4f6;">
@@ -387,41 +387,29 @@ const LeadMap: React.FC<LeadMapProps> = ({ leads, discoveryResults = [], openAiK
     setProximityAlerts(proximityMsgs.slice(0, 6));
 
     // Heat layer com círculos suaves
-    if (showHeatmap && heatPoints.length > 0) {
-        const heatGroup = L.layerGroup();
-        heatPoints.forEach(([lat, lng, weight]) => {
-            L.circle([lat, lng], {
-                radius: 250 * weight,
-                color: '#6366f1',
-                weight: 0,
-                fillColor: '#6366f1',
-                fillOpacity: 0.25
-            }).addTo(heatGroup);
-        });
-        heatGroup.addTo(map);
-        heatLayerRef.current = heatGroup;
-    }
-
     if (!bounds.isValid()) return;
     map.fitBounds(bounds, { padding: [60, 60] });
 
-  }, [filteredPoints, addLead, searchRadius, showHeatmap]);
+  }, [filteredPoints, addLead, searchRadius]);
 
   const addTileLayer = (map: any, type: 'street' | 'satellite') => {
       const L = (window as any).L;
+      let layer;
       if (type === 'street') {
-        L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+        layer = L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
             attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
             subdomains: 'abcd',
             maxZoom: 20
         }).addTo(map);
       } else {
         // Using Esri World Imagery for Satellite feel
-        L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+        layer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
             attribution: 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community',
             maxZoom: 19
         }).addTo(map);
       }
+      layer.on('tileerror', () => setTileError(true));
+      layer.on('load', () => setTileError(false));
   };
 
   const centerMap = () => {
@@ -619,8 +607,8 @@ const LeadMap: React.FC<LeadMapProps> = ({ leads, discoveryResults = [], openAiK
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-3">
-        <div className="col-span-2 bg-white border border-gray-200 rounded-xl p-3 shadow-sm flex flex-wrap gap-2 items-center">
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-3 max-w-6xl mx-auto w-full">
+        <div className="col-span-2 glass-panel rounded-xl p-3 flex flex-wrap gap-2 items-center">
           <span className="text-xs font-bold text-gray-500 uppercase">Filtros rápidos</span>
           <div className="flex gap-1">
             {(['all', PipelineStage.NEW, PipelineStage.CONTACT, PipelineStage.QUALIFIED, PipelineStage.CLOSED] as const).map(st => (
@@ -654,41 +642,8 @@ const LeadMap: React.FC<LeadMapProps> = ({ leads, discoveryResults = [], openAiK
             />
           </div>
         </div>
-        <div className="bg-white border border-gray-200 rounded-xl p-3 shadow-sm flex items-center gap-3">
-          <label className="flex items-center gap-2 text-sm text-gray-700">
-            <input
-              type="checkbox"
-              checked={showHeatmap}
-              onChange={() => setShowHeatmap(!showHeatmap)}
-              className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-            />
-            Heatmap / densidade
-          </label>
-          <div className="flex items-center gap-2 ml-auto">
-            <input
-              type="number"
-              min={1}
-              value={searchRadius}
-              onChange={(e) => setSearchRadius(Number(e.target.value) || 1)}
-              className="w-14 px-2 py-1 text-xs border border-gray-200 rounded-lg focus:ring-1 focus:ring-indigo-500"
-              title="Raio em km"
-            />
-            <button
-              onClick={handleRadiusSearch}
-              disabled={isSearching}
-              className="px-3 py-1.5 text-xs font-semibold bg-amber-500 text-white rounded-lg hover:bg-amber-600 transition disabled:opacity-60 flex items-center gap-1"
-            >
-              Raio {searchRadius} km
-            </button>
-            <button
-              onClick={buildRoutePlan}
-              className="px-3 py-1.5 text-xs font-semibold bg-gray-900 text-white rounded-lg hover:bg-black transition"
-            >
-              Gerar roteiro
-            </button>
-          </div>
-        </div>
-        <div className="bg-white border border-gray-200 rounded-xl p-3 shadow-sm text-xs text-gray-700">
+        {/* Heatmap controls removidos */}
+        <div className="glass-panel rounded-xl p-3 text-xs text-gray-700">
           <p className="font-bold text-gray-800 mb-1">Alertas de proximidade</p>
           {proximityAlerts.length === 0 && <p className="text-gray-400">Nenhum alerta ativo.</p>}
           {proximityAlerts.map((msg, idx) => (
@@ -699,18 +654,18 @@ const LeadMap: React.FC<LeadMapProps> = ({ leads, discoveryResults = [], openAiK
         </div>
       </div>
 
-      <div className="flex-1 flex gap-4 h-full min-h-0 relative">
+          <div className="flex-1 flex gap-4 h-full min-h-0 relative flex-col">
           
-          {/* Smart Search Bar Overlay - Centered */}
-          <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[400] w-full max-w-5xl flex flex-col gap-2 px-4">
-              <form onSubmit={handleMapSearch} className="flex flex-wrap md:flex-nowrap gap-2 p-2 bg-white/95 backdrop-blur rounded-xl shadow-lg border border-gray-200 items-center">
+          {/* Smart Search Bar - Below filters */}
+          <div className="w-full max-w-6xl mx-auto flex flex-col gap-2 px-2 sm:px-4 z-[50] mt-4">
+              <form onSubmit={handleMapSearch} className="flex flex-wrap md:flex-nowrap gap-2 p-2 bg-white/95 dark:bg-slate-900/90 backdrop-blur rounded-xl shadow-lg border border-gray-200 dark:border-slate-800 items-center">
                   
                    {/* Country Selector */}
                    <div className="relative w-24 shrink-0" ref={countryRef}>
                         <button
                             type="button"
                             onClick={() => setIsCountryOpen(!isCountryOpen)}
-                            className="w-full px-2 py-2.5 rounded-lg border border-gray-200 bg-white text-sm text-gray-900 focus:ring-2 focus:ring-indigo-500 outline-none flex items-center justify-between"
+                        className="w-full px-2 py-2.5 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm text-gray-900 dark:text-slate-100 focus:ring-2 focus:ring-indigo-500 outline-none flex items-center justify-between"
                         >
                              <div className="flex items-center gap-1.5">
                                 <img src={LOCATIONS[country].flag} alt={country} className="w-4 h-auto rounded-sm" />
@@ -719,7 +674,7 @@ const LeadMap: React.FC<LeadMapProps> = ({ leads, discoveryResults = [], openAiK
                             <ChevronDown className="w-3 h-3 text-gray-400" />
                         </button>
                         {isCountryOpen && (
-                            <div className="absolute top-full left-0 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-xl z-50 overflow-hidden">
+                            <div className="absolute top-full left-0 w-full mt-1 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg shadow-xl z-50 overflow-hidden">
                                 {Object.entries(LOCATIONS).map(([code, data]) => (
                                     <div
                                         key={code}
@@ -739,16 +694,16 @@ const LeadMap: React.FC<LeadMapProps> = ({ leads, discoveryResults = [], openAiK
                         <button
                             type="button"
                             onClick={() => setIsRegionOpen(!isRegionOpen)}
-                            className="w-full px-3 py-2.5 rounded-lg border border-gray-200 bg-white text-sm text-gray-700 flex justify-between items-center hover:bg-gray-50 focus:ring-2 focus:ring-indigo-500 outline-none"
+                            className="w-full px-3 py-2.5 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm text-gray-700 dark:text-slate-100 flex justify-between items-center hover:bg-gray-50 dark:hover:bg-slate-800 focus:ring-2 focus:ring-indigo-500 outline-none"
                         >
                             <span className="truncate text-xs">{region || "Estado"}</span>
                             <ChevronDown className="w-3 h-3 text-gray-400" />
                         </button>
                          {isRegionOpen && (
-                            <div className="absolute top-full left-0 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-xl z-50 max-h-48 overflow-y-auto custom-scrollbar">
-                                <div onClick={() => { setRegion(''); setIsRegionOpen(false); }} className="px-3 py-2 text-xs hover:bg-indigo-50 cursor-pointer text-gray-500 italic">Todos</div>
+                            <div className="absolute top-full left-0 w-full mt-1 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg shadow-xl z-50 max-h-48 overflow-y-auto custom-scrollbar">
+                                <div onClick={() => { setRegion(''); setIsRegionOpen(false); }} className="px-3 py-2 text-xs hover:bg-indigo-50 dark:hover:bg-slate-800 cursor-pointer text-gray-500 dark:text-slate-300 italic">Todos</div>
                                 {LOCATIONS[country].states.map(s => (
-                                    <div key={s} onClick={() => { setRegion(s); setIsRegionOpen(false); }} className={`px-3 py-2 text-xs hover:bg-indigo-50 cursor-pointer ${region === s ? 'text-indigo-600 font-bold' : 'text-gray-700'}`}>
+                                    <div key={s} onClick={() => { setRegion(s); setIsRegionOpen(false); }} className={`px-3 py-2 text-xs hover:bg-indigo-50 dark:hover:bg-slate-800 cursor-pointer ${region === s ? 'text-indigo-600 font-bold dark:text-indigo-300' : 'text-gray-700 dark:text-slate-200'}`}>
                                         {s}
                                     </div>
                                 ))}
@@ -762,7 +717,7 @@ const LeadMap: React.FC<LeadMapProps> = ({ leads, discoveryResults = [], openAiK
                         placeholder="Buscar local (ex: Av. Paulista, Restaurantes...)" 
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
-                        className="w-full pl-9 pr-4 py-2.5 rounded-lg border border-gray-200 focus:ring-2 focus:ring-indigo-500 outline-none text-sm bg-white"
+                        className="w-full pl-9 pr-4 py-2.5 rounded-lg border border-gray-200 dark:border-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none text-sm bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100"
                     />
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                   </div>
@@ -772,18 +727,22 @@ const LeadMap: React.FC<LeadMapProps> = ({ leads, discoveryResults = [], openAiK
                       <button
                           type="button"
                           onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-                          className="w-full px-3 py-2.5 rounded-lg border border-gray-200 bg-white text-sm text-gray-700 flex justify-between items-center hover:bg-gray-50 focus:ring-2 focus:ring-indigo-500 outline-none"
+                          className="w-full px-3 py-2.5 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm text-gray-700 dark:text-slate-100 flex justify-between items-center hover:bg-gray-50 dark:hover:bg-indigo-900/30 focus:ring-2 focus:ring-indigo-500 outline-none transition-colors"
                       >
                           <span className="truncate text-xs">{searchIndustry || "Nicho (ex: Clínicas de Estética, Restaurantes Japoneses)"}</span>
                           <ChevronDown className={`w-3 h-3 text-gray-400 transition-transform ${isDropdownOpen ? 'rotate-180' : ''}`} />
                       </button>
                       
                       {isDropdownOpen && (
-                          <div className="absolute top-full left-0 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-xl z-50 animate-in fade-in zoom-in-95 duration-100 max-h-60 overflow-y-auto custom-scrollbar">
+                          <div className="absolute top-full left-0 mt-1 w-full bg-white/95 dark:bg-slate-900/95 border border-gray-200 dark:border-slate-700 rounded-lg shadow-xl z-50 animate-in fade-in zoom-in-95 duration-100 max-h-60 overflow-y-auto custom-scrollbar">
                               <button
                                   type="button"
                                   onClick={() => { setSearchIndustry(''); setIsDropdownOpen(false); }}
-                                  className={`w-full text-left px-3 py-2 text-xs hover:bg-indigo-50 flex items-center justify-between ${searchIndustry === '' ? 'text-indigo-600 font-medium bg-indigo-50' : 'text-gray-700'}`}
+                                  className={`w-full text-left px-3 py-2 text-xs flex items-center justify-between transition-colors ${
+                                    searchIndustry === '' 
+                                    ? 'text-indigo-600 font-medium bg-indigo-50 dark:bg-indigo-900/40 dark:text-indigo-100' 
+                                    : 'text-gray-700 dark:text-slate-100 hover:bg-indigo-50 hover:text-indigo-700 dark:hover:bg-indigo-900/30 dark:hover:text-white'
+                                  }`}
                               >
                                   Nicho (ex: Clínicas de Estética, Restaurantes Japoneses)
                                   {searchIndustry === '' && <Check className="w-3 h-3" />}
@@ -793,7 +752,11 @@ const LeadMap: React.FC<LeadMapProps> = ({ leads, discoveryResults = [], openAiK
                                       key={ind}
                                       type="button"
                                       onClick={() => { setSearchIndustry(ind); setIsDropdownOpen(false); }}
-                                      className={`w-full text-left px-3 py-2 text-xs hover:bg-indigo-50 flex items-center justify-between ${searchIndustry === ind ? 'text-indigo-600 font-medium bg-indigo-50' : 'text-gray-700'}`}
+                                      className={`w-full text-left px-3 py-2 text-xs flex items-center justify-between transition-colors ${
+                                        searchIndustry === ind 
+                                        ? 'text-indigo-600 font-medium bg-indigo-50 dark:bg-indigo-900/40 dark:text-indigo-100' 
+                                        : 'text-gray-700 dark:text-slate-100 hover:bg-indigo-50 hover:text-indigo-700 dark:hover:bg-indigo-900/30 dark:hover:text-white'
+                                      }`}
                                   >
                                       {ind}
                                       {searchIndustry === ind && <Check className="w-3 h-3" />}
@@ -820,7 +783,7 @@ const LeadMap: React.FC<LeadMapProps> = ({ leads, discoveryResults = [], openAiK
                   <button 
                         type="submit" 
                         disabled={isSearching}
-                        className="px-4 py-2.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50 font-medium text-sm flex items-center gap-2 shrink-0"
+                        className="glass-purple px-4 py-2.5 text-white rounded-lg transition-all disabled:opacity-50 font-medium text-sm flex items-center gap-2 shrink-0"
                     >
                         {isSearching ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Buscar'}
                     </button>
@@ -835,8 +798,15 @@ const LeadMap: React.FC<LeadMapProps> = ({ leads, discoveryResults = [], openAiK
           </div>
 
           {/* Map Container */}
-          <div className="flex-1 bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden relative z-0">
-             <div ref={mapContainerRef} className="w-full h-full" style={{ zIndex: 1 }} />
+          <div className="flex-1 bg-white dark:bg-slate-900 rounded-xl shadow-lg border border-gray-200 dark:border-slate-800 overflow-hidden relative z-0 h-[70vh] min-h-[480px]">
+             <div ref={mapContainerRef} className="w-full h-full" style={{ zIndex: 1, background: 'radial-gradient(circle at 20% 20%, rgba(59,130,246,0.08), transparent 35%), radial-gradient(circle at 80% 80%, rgba(99,102,241,0.08), transparent 40%), #0f172a' }} />
+             {tileError && (
+               <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                  <div className="glass-panel px-4 py-2 rounded-xl text-sm text-gray-700 dark:text-slate-100 shadow-lg">
+                    Mapa indisponível no momento (tiles bloqueados/offline).
+                  </div>
+               </div>
+             )}
              
              {/* Legend Overlay */}
              <div className="absolute bottom-6 right-6 bg-white/90 backdrop-blur-md p-4 rounded-xl shadow-lg border border-gray-100 z-[400] text-xs">

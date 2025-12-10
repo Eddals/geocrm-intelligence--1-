@@ -136,7 +136,7 @@ const EmailAutomation: React.FC<EmailAutomationProps> = ({ leads, settings, upda
           ...(selectedLead.history || []),
           {
             date: new Date().toISOString(),
-            description: 'Email gerado via Perplexity',
+            description: 'Email gerado via Mapa Inteligente',
             type: 'update'
           }
         ]
@@ -220,7 +220,7 @@ const EmailAutomation: React.FC<EmailAutomationProps> = ({ leads, settings, upda
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         <div className="lg:col-span-5 space-y-6">
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-5">
+          <div className="glass-panel rounded-2xl p-5">
             <div className="flex items-center justify-between mb-4">
               <div>
                 <p className="text-xs font-bold text-gray-500 uppercase">Leads</p>
@@ -257,7 +257,7 @@ const EmailAutomation: React.FC<EmailAutomationProps> = ({ leads, settings, upda
             </div>
           </div>
 
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-5">
+          <div className="glass-panel rounded-2xl p-5">
             <div className="flex items-center gap-2 mb-4">
               <ShieldCheck className="w-5 h-5 text-emerald-600" />
               <div>
@@ -288,7 +288,7 @@ const EmailAutomation: React.FC<EmailAutomationProps> = ({ leads, settings, upda
 
         <div className="lg:col-span-7 space-y-5">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-5">
+            <div className="glass-panel rounded-2xl p-5">
               <div className="flex items-center justify-between mb-4">
                 <div>
                   <p className="text-xs font-bold text-gray-500 uppercase">Aproximação</p>
@@ -298,7 +298,7 @@ const EmailAutomation: React.FC<EmailAutomationProps> = ({ leads, settings, upda
                   type="button"
                   onClick={handleGenerate}
                   disabled={!selectedLead || isGenerating}
-                  className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl text-sm font-semibold shadow-sm disabled:opacity-60"
+                  className="flex items-center gap-2 glass-purple text-white px-4 py-2 rounded-xl text-sm font-semibold shadow-sm disabled:opacity-60"
                 >
                   {isGenerating ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
                   Criar Email
@@ -370,7 +370,7 @@ const EmailAutomation: React.FC<EmailAutomationProps> = ({ leads, settings, upda
                 </button>
                 <button
                   type="button"
-                  className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 transition-all shadow-sm disabled:opacity-60 text-sm font-medium"
+                  className="flex items-center gap-2 glass-purple text-white px-4 py-2.5 rounded-xl transition-all shadow-sm disabled:opacity-60 text-sm font-medium"
                   disabled={!selectedLead || !subject || !body}
                   onClick={handleSendNow}
                 >
@@ -380,7 +380,7 @@ const EmailAutomation: React.FC<EmailAutomationProps> = ({ leads, settings, upda
             </div>
             </div>
 
-            <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-5">
+            <div className="glass-panel rounded-2xl p-5">
               <div className="flex items-center gap-2 mb-4">
                 <Repeat className="w-5 h-5 text-amber-600" />
                 <div>

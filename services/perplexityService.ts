@@ -221,13 +221,13 @@ export const findNearbyPlacesWithPerplexity = async (
       rating: item.rating,
       openingHours: item.openingHours,
       status: PipelineStage.NEW,
-      source: 'Perplexity Maps',
+      source: 'Mapa Inteligente',
       lat: Number(item.lat),
       lng: Number(item.lng),
       address: item.address || addressName,
       city: item.city || addressName,
       value: item.estimatedValue || 5000,
-      tags: [industry || 'Mapa', 'Perplexity']
+      tags: [industry || 'Mapa', 'Mapa Inteligente']
     }));
   } catch (error) {
     console.error('Erro Perplexity nearby:', error);
