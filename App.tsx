@@ -767,10 +767,7 @@ const App: React.FC = () => {
           <Calendar
             currentUserId={currentUserId}
             settings={settings}
-            leads={leads}
             notify={addNotification}
-            updateLeadFromCalendar={updateLeadDetails}
-            updateLeadStatusFromCalendar={updateLeadStatus}
           />
         );
       case 'settings':

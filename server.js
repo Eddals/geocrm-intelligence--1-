@@ -22,7 +22,8 @@ const securityHeaders = (req, res, next) => {
     "script-src 'self' https://cdn.tailwindcss.com https://unpkg.com https://aistudiocdn.com",
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://unpkg.com",
     "font-src 'self' https://fonts.gstatic.com data:",
-    "img-src 'self' data: blob: https://unpkg.com",
+    // Allow images used by the frontend (logo, flags, leaflet tiles)
+    "img-src 'self' data: blob: https://unpkg.com https://i.imgur.com https://flagcdn.com https://upload.wikimedia.org https://cdn.iconscout.com https://1000logos.net",
     "connect-src 'self' https://api.ydc-index.io https://aistudiocdn.com",
     "frame-ancestors 'self'",
     "object-src 'none'",

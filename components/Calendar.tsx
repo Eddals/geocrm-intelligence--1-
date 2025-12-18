@@ -4,19 +4,25 @@ import {
   CalendarDays,
   CheckCircle2,
   Clock3,
+  ChevronDown,
+  Building2,
+  Globe2,
   Link as LinkIcon,
   List,
   Mail,
   MessageCircle,
+  FileText,
+  Phone,
   Pencil,
   Plus,
   Save,
   SlidersHorizontal,
   Trash2,
+  User,
   X
 } from 'lucide-react';
 
-import { AppSettings, Lead, PipelineStage } from '../types';
+import { AppSettings } from '../types';
 import { cancelScheduledEmailJob, scheduleEmail, sendRealEmail } from '../services/emailApi';
 import CalendarSidebar from './CalendarSidebar';
 import {
@@ -35,10 +41,7 @@ import {
 interface CalendarProps {
   currentUserId?: string | null;
   settings: AppSettings;
-  leads: Lead[];
   notify?: (msg: string, type?: 'success' | 'info' | 'warning') => void;
-  updateLeadFromCalendar?: (leadId: string, updates: Partial<Lead>) => Promise<void> | void;
-  updateLeadStatusFromCalendar?: (leadId: string, status: PipelineStage) => Promise<void> | void;
 }
 
 const LS_CONFIG_V1 = 'geocrm_calendar_config_v1';
@@ -48,6 +51,9 @@ const LS_APPTS = 'geocrm_calendar_appointments_v2';
 
 type LocalConfig = Omit<CalendarConfig, 'userId'>;
 type LocalAppointment = CalendarAppointment;
+
+type ChannelOption = { id: CalendarChannel; label: string; logo?: string; accent: string };
+type DropdownOption<T extends string> = { id: T; label: string; hint?: string; icon?: React.ElementType };
 
 const pad2 = (n: number) => String(n).padStart(2, '0');
 
@@ -103,16 +109,209 @@ const weekdayLabel: Record<number, string> = {
   6: 'Sáb'
 };
 
-const TIMEZONES = [
-  'America/Sao_Paulo',
-  'America/Fortaleza',
-  'America/Manaus',
-  'America/Belem',
-  'America/New_York',
-  'America/Los_Angeles',
-  'Europe/Lisbon',
-  'Europe/London'
+const TIMEZONE_OPTIONS = [
+  { id: 'America/Sao_Paulo', label: 'Brasil' },
+  { id: 'America/New_York', label: 'EUA' },
+  { id: 'Europe/Lisbon', label: 'Portugal' }
 ] as const;
+
+const CHANNEL_OPTIONS: ChannelOption[] = [
+  {
+    id: 'Google Meet',
+    label: 'Google Meet',
+    logo: '/icons/google-meet.png',
+    accent: ''
+  },
+  {
+    id: 'Zoom',
+    label: 'Zoom',
+    logo: '/icons/zoom.png',
+    accent: ''
+  },
+  {
+    id: 'WhatsApp',
+    label: 'WhatsApp',
+    logo: '/icons/whatsapp.png',
+    accent: ''
+  },
+  {
+    id: 'Telefone',
+    label: 'Telefone',
+    accent: ''
+  }
+];
+
+const channelLogoClass = (id: CalendarChannel, variant: 'trigger' | 'menu') => {
+  const base = variant === 'trigger' ? 'max-w-[18px] max-h-[18px]' : 'max-w-[20px] max-h-[20px]';
+  const zoom = variant === 'trigger' ? 'max-w-[16px] max-h-[16px]' : 'max-w-[18px] max-h-[18px]';
+  return `${id === 'Zoom' ? zoom : base} object-contain`;
+};
+
+const Dropdown = <T extends string,>({
+  value,
+  onChange,
+  disabled,
+  options,
+  renderLeft
+}: {
+  value: T;
+  onChange: (value: T) => void;
+  disabled?: boolean;
+  options: DropdownOption<T>[];
+  renderLeft?: (active: DropdownOption<T> | undefined) => React.ReactNode;
+}) => {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement | null>(null);
+  const active = options.find((o) => o.id === value);
+
+  useEffect(() => {
+    const onDoc = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (ref.current && !ref.current.contains(target)) setOpen(false);
+    };
+    document.addEventListener('mousedown', onDoc);
+    return () => document.removeEventListener('mousedown', onDoc);
+  }, []);
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={() => setOpen((p) => !p)}
+        className={`w-full flex items-center justify-between gap-3 rounded-lg border border-white/20 bg-white/60 dark:bg-white/10 px-3 py-2 text-[13px] leading-5 text-gray-800 dark:text-slate-100 transition ${
+          disabled ? 'opacity-60 cursor-not-allowed' : 'hover:bg-white/55 dark:hover:bg-white/15'
+        }`}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+      >
+        <span className="flex items-center gap-2 min-w-0">
+          {renderLeft ? renderLeft(active) : active?.icon ? <active.icon className="w-4 h-4 text-purple-500" /> : null}
+          <span className="font-semibold truncate">{active?.label || value}</span>
+        </span>
+        <ChevronDown className={`w-4 h-4 text-gray-600 dark:text-slate-300 transition-transform ${open ? 'rotate-180' : ''}`} />
+      </button>
+
+      {open ? (
+        <div
+          role="listbox"
+          className="absolute z-30 mt-2 w-full rounded-xl border border-white/20 bg-white/95 dark:bg-slate-900/95 shadow-2xl overflow-hidden max-h-72 overflow-auto"
+        >
+          {options.map((opt) => {
+            const isActive = opt.id === value;
+            const Icon = opt.icon;
+            return (
+              <button
+                type="button"
+                key={opt.id}
+                onClick={() => {
+                  onChange(opt.id);
+                  setOpen(false);
+                }}
+                className={`w-full text-left px-3 py-1.5 flex items-center gap-3 transition ${
+                  isActive ? 'bg-purple-500/10 dark:bg-purple-500/15' : 'hover:bg-purple-500/10 dark:hover:bg-purple-500/10'
+                }`}
+              >
+                {Icon ? (
+                  <span className="w-7 h-7 rounded-lg border border-white/15 bg-white/70 dark:bg-white/10 grid place-items-center shrink-0">
+                    <Icon className="w-4 h-4 text-purple-500" />
+                  </span>
+                ) : null}
+                <span className="flex-1">
+                  <span className="text-[12px] leading-5 font-semibold text-gray-900 dark:text-slate-50">{opt.label}</span>
+                  {opt.hint ? <span className="block text-[10px] text-gray-500 dark:text-slate-300">{opt.hint}</span> : null}
+                </span>
+                {isActive ? <CheckCircle2 className="w-5 h-5 text-emerald-500" /> : null}
+              </button>
+            );
+          })}
+        </div>
+      ) : null}
+    </div>
+  );
+};
+
+const ChannelDropdown: React.FC<{
+  value: CalendarChannel;
+  onChange: (value: CalendarChannel) => void;
+  disabled?: boolean;
+}> = ({ value, onChange, disabled }) => {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement | null>(null);
+  const active = CHANNEL_OPTIONS.find((o) => o.id === value) || CHANNEL_OPTIONS[0];
+
+  useEffect(() => {
+    const onDoc = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (ref.current && !ref.current.contains(target)) setOpen(false);
+    };
+    document.addEventListener('mousedown', onDoc);
+    return () => document.removeEventListener('mousedown', onDoc);
+  }, []);
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={() => setOpen((p) => !p)}
+        className={`w-full flex items-center justify-between gap-3 rounded-lg border border-white/20 bg-white/60 dark:bg-white/10 px-3 py-2 text-[13px] leading-5 text-gray-800 dark:text-slate-100 transition ${
+          disabled ? 'opacity-60 cursor-not-allowed' : 'hover:bg-white/55 dark:hover:bg-white/15'
+        }`}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+      >
+        <span className="flex items-center gap-2 min-w-0">
+          <span className="w-7 h-7 rounded-lg overflow-hidden border border-white/15 bg-white/70 dark:bg-white/10 shrink-0 grid place-items-center">
+            {active.logo ? (
+              <img src={active.logo} alt={active.label} className={channelLogoClass(active.id, 'trigger')} loading="lazy" />
+            ) : (
+              <MessageCircle className="w-5 h-5 text-purple-500 relative" />
+            )}
+          </span>
+          <span className="font-semibold truncate">{active.label}</span>
+        </span>
+        <ChevronDown className={`w-4 h-4 text-gray-600 dark:text-slate-300 transition-transform ${open ? 'rotate-180' : ''}`} />
+      </button>
+
+      {open ? (
+        <div
+          role="listbox"
+          className="absolute z-30 mt-2 w-full rounded-xl border border-white/20 bg-white/95 dark:bg-slate-900/95 shadow-2xl overflow-hidden max-h-72 overflow-auto"
+        >
+          {CHANNEL_OPTIONS.map((opt) => {
+            const isActive = opt.id === value;
+            return (
+              <button
+                type="button"
+                key={opt.id}
+                onClick={() => {
+                  onChange(opt.id);
+                  setOpen(false);
+                }}
+                className={`w-full text-left px-3 py-1.5 flex items-center gap-3 transition ${
+                  isActive ? 'bg-purple-500/10 dark:bg-purple-500/15' : 'hover:bg-purple-500/10 dark:hover:bg-purple-500/10'
+                }`}
+              >
+                <span className="w-7 h-7 rounded-lg overflow-hidden border border-white/15 bg-white/70 dark:bg-white/10 shrink-0 grid place-items-center">
+                  {opt.logo ? (
+                    <img src={opt.logo} alt={opt.label} className={channelLogoClass(opt.id, 'menu')} loading="lazy" />
+                  ) : (
+                    <MessageCircle className="w-5 h-5 text-purple-500 relative" />
+                  )}
+                </span>
+                <span className="flex-1">
+                  <span className="text-[12px] leading-5 font-semibold text-gray-900 dark:text-slate-50">{opt.label}</span>
+                </span>
+                {isActive ? <CheckCircle2 className="w-5 h-5 text-emerald-500" /> : null}
+              </button>
+            );
+          })}
+        </div>
+      ) : null}
+    </div>
+  );
+};
 
 const loadJSON = <T,>(key: string): T | null => {
   try {
@@ -258,10 +457,7 @@ const resolveBackendBaseUrl = () => {
 const Calendar: React.FC<CalendarProps> = ({
   currentUserId,
   settings,
-  leads,
   notify,
-  updateLeadFromCalendar,
-  updateLeadStatusFromCalendar
 }) => {
   const [tab, setTab] = useState<'agendar' | 'agenda' | 'config'>('agendar');
   const [persistMode, setPersistMode] = useState<'supabase' | 'local'>('local');
@@ -311,10 +507,6 @@ const Calendar: React.FC<CalendarProps> = ({
   const [isSavingConfig, setIsSavingConfig] = useState(false);
   const hasLoadedFromSupabase = useRef(false);
 
-  // Lead selection
-  const [leadSearch, setLeadSearch] = useState('');
-  const [selectedLeadId, setSelectedLeadId] = useState<string>('');
-
   // Blocks form
   const [blockDate, setBlockDate] = useState('');
   const [blockAllDay, setBlockAllDay] = useState(true);
@@ -346,7 +538,7 @@ const Calendar: React.FC<CalendarProps> = ({
   }, [appointments]);
 
   useEffect(() => {
-    const isPreset = (TIMEZONES as readonly string[]).includes(config.timezone || '');
+    const isPreset = TIMEZONE_OPTIONS.some((t) => t.id === (config.timezone || ''));
     setCustomTimezone(!isPreset);
   }, [config.timezone]);
 
@@ -595,30 +787,8 @@ const Calendar: React.FC<CalendarProps> = ({
       .filter((a) => new Date(a.startAt).valueOf() + a.durationMinutes * 60_000 >= now);
   }, [appointments]);
 
-  const filteredLeadSuggestions = useMemo(() => {
-    const q = leadSearch.trim().toLowerCase();
-    if (!q) return [];
-    return (leads || [])
-      .filter((l) => (l.company || '').toLowerCase().includes(q) || (l.name || '').toLowerCase().includes(q))
-      .slice(0, 8);
-  }, [leadSearch, leads]);
-
-  const selectLead = (lead: Lead) => {
-    setSelectedLeadId(lead.id);
-    setLeadSearch(`${lead.company || lead.name}`);
-    setLeadForm({
-      name: lead.name || '',
-      email: lead.email || '',
-      phone: lead.phone || '',
-      company: lead.company || '',
-      notes: ''
-    });
-  };
-
   const resetAppointmentForm = () => {
     setEditingId(null);
-    setSelectedLeadId('');
-    setLeadSearch('');
     setSlotIso('');
     setChannel('Google Meet');
     setMeetingLink('');
@@ -706,13 +876,10 @@ const Calendar: React.FC<CalendarProps> = ({
     setError('');
     const minutes = Math.max(5, Number(durationMinutes) || 30);
 
-    const leadIdNum = selectedLeadId ? Number(selectedLeadId) : NaN;
-    const leadId = Number.isFinite(leadIdNum) ? leadIdNum : null;
-
     const appt: CalendarAppointment = {
       id: editingId || uuidv4(),
       userId: currentUserId || '',
-      leadId,
+      leadId: null,
       status,
       startAt: slotIso,
       durationMinutes: minutes,
@@ -762,26 +929,6 @@ const Calendar: React.FC<CalendarProps> = ({
         setPersistMode('local');
         setPersistMsg('Falha ao salvar agendamento no Supabase. Mantendo local.');
         notify?.('Falha ao salvar agendamento no Supabase. Salvando localmente.', 'warning');
-      }
-    }
-
-    // Update lead status (best-effort)
-    if (selectedLeadId) {
-      try {
-        await updateLeadStatusFromCalendar?.(selectedLeadId, PipelineStage.WAITING);
-        const leadRow = leads.find((l) => l.id === selectedLeadId);
-        const baseHistory = Array.isArray(leadRow?.history) ? leadRow!.history : [];
-        const historyEntry = {
-          date: new Date().toISOString(),
-          description: `Agendamento criado: ${formatDateTime(appt.startAt, fullConfig.timezone)} • ${appt.channel}`,
-          type: 'update'
-        } as any;
-        await updateLeadFromCalendar?.(selectedLeadId, {
-          lastContact: new Date().toISOString(),
-          history: [...baseHistory, historyEntry]
-        });
-      } catch {
-        // ignore
       }
     }
 
@@ -878,8 +1025,6 @@ const Calendar: React.FC<CalendarProps> = ({
       company: a.leadCompany || '',
       notes: a.leadNotes || ''
     });
-    if (a.leadId) setSelectedLeadId(String(a.leadId));
-    else setSelectedLeadId('');
     setError('');
   };
 
@@ -933,11 +1078,6 @@ const Calendar: React.FC<CalendarProps> = ({
     if (s === 'pending') return 'bg-amber-500/10 text-amber-400 border-amber-500/30';
     return 'bg-rose-500/10 text-rose-400 border-rose-500/30';
   };
-
-  const selectedLeadPreview = useMemo(() => {
-    if (!selectedLeadId) return null;
-    return leads.find((l) => l.id === selectedLeadId) || null;
-  }, [leads, selectedLeadId]);
 
   const persistLabel = persistMode === 'supabase' ? 'Supabase' : 'Local';
 
@@ -1019,25 +1159,22 @@ const Calendar: React.FC<CalendarProps> = ({
 	            <div className="space-y-2">
 	              <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">Fuso horário</label>
 	              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-	                <select
-	                  value={customTimezone ? '__custom__' : config.timezone}
-	                  onChange={(e) => {
-	                    if (e.target.value === '__custom__') {
+	                <Dropdown
+	                  value={customTimezone ? ('__custom__' as any) : (config.timezone as any)}
+	                  onChange={(v: any) => {
+	                    if (v === '__custom__') {
 	                      setCustomTimezone(true);
 	                      return;
 	                    }
 	                    setCustomTimezone(false);
-	                    setConfig((p) => ({ ...p, timezone: e.target.value }));
+	                    setConfig((p) => ({ ...p, timezone: v }));
 	                  }}
-	                  className="w-full rounded-lg border border-white/30 dark:border-white/20 bg-white/80 dark:bg-white/15 px-3 py-2 text-sm text-gray-800 dark:text-slate-100"
-	                >
-	                  {TIMEZONES.map((tz) => (
-	                    <option key={tz} value={tz}>
-	                      {tz}
-	                    </option>
-	                  ))}
-	                  <option value="__custom__">Outro…</option>
-	                </select>
+	                  options={[
+	                    ...TIMEZONE_OPTIONS.map((t) => ({ id: t.id as any, label: t.label, icon: Globe2 })),
+	                    { id: '__custom__' as any, label: 'Outro…', icon: Globe2 }
+	                  ]}
+	                  renderLeft={() => <Globe2 className="w-4 h-4 text-purple-500" />}
+	                />
 	                <input
 	                  value={customTimezone ? config.timezone : ''}
 	                  onChange={(e) => setConfig((p) => ({ ...p, timezone: e.target.value }))}
@@ -1158,17 +1295,17 @@ const Calendar: React.FC<CalendarProps> = ({
                   className="w-full rounded-lg border border-white/30 dark:border-white/20 bg-white/80 dark:bg-white/15 px-3 py-2 text-sm text-gray-800 dark:text-slate-100"
                 />
               </div>
-              <div className="space-y-2">
-                <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">Tipo</label>
-                <select
-                  value={blockAllDay ? 'all' : 'range'}
-                  onChange={(e) => setBlockAllDay(e.target.value === 'all')}
-                  className="w-full rounded-lg border border-white/30 dark:border-white/20 bg-white/80 dark:bg-white/15 px-3 py-2 text-sm text-gray-800 dark:text-slate-100"
-                >
-                  <option value="all">Dia todo</option>
-                  <option value="range">Faixa</option>
-                </select>
-              </div>
+	              <div className="space-y-2">
+	                <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">Tipo</label>
+	                <Dropdown
+	                  value={blockAllDay ? 'all' : 'range'}
+	                  onChange={(v) => setBlockAllDay(v === 'all')}
+	                  options={[
+	                    { id: 'all', label: 'Dia todo', hint: 'Bloqueia o dia inteiro', icon: CalendarDays },
+	                    { id: 'range', label: 'Faixa', hint: 'Bloqueia um horário', icon: Clock3 }
+	                  ]}
+	                />
+	              </div>
               {!blockAllDay ? (
                 <div className="space-y-2">
                   <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">Hora</label>
@@ -1378,34 +1515,24 @@ const Calendar: React.FC<CalendarProps> = ({
                   {dayName} • {isWorkingDay ? 'dia de atendimento' : 'fora do atendimento'}
                 </p>
               </div>
-              <div className="space-y-2">
-                <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">Status</label>
-                <select
-                  value={status}
-                  onChange={(e) => setStatus(e.target.value as any)}
-                  className="w-full rounded-lg border border-white/30 dark:border-white/20 bg-white/80 dark:bg-white/15 px-3 py-2 text-sm text-gray-800 dark:text-slate-100"
-                >
-                  <option value="confirmed">Confirmado</option>
-                  <option value="pending">Aguardando</option>
-                  <option value="canceled">Cancelado</option>
-                </select>
-              </div>
+	              <div className="space-y-2">
+	                <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">Status</label>
+	                <Dropdown
+	                  value={status}
+	                  onChange={(v) => setStatus(v as any)}
+	                  options={[
+	                    { id: 'confirmed' as any, label: 'Confirmado', icon: CheckCircle2 },
+	                    { id: 'pending' as any, label: 'Aguardando', icon: Clock3 },
+	                    { id: 'canceled' as any, label: 'Cancelado', icon: X }
+	                  ]}
+	                />
+	              </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">Canal</label>
-                <select
-                  value={channel}
-                  onChange={(e) => setChannel(e.target.value as CalendarChannel)}
-                  className="w-full rounded-lg border border-white/30 dark:border-white/20 bg-white/80 dark:bg-white/15 px-3 py-2 text-sm text-gray-800 dark:text-slate-100"
-                >
-                  {(['Google Meet', 'Zoom', 'WhatsApp', 'Telefone'] as CalendarChannel[]).map((c) => (
-                    <option key={c} value={c}>
-                      {c}
-                    </option>
-                  ))}
-                </select>
+                <ChannelDropdown value={channel} onChange={setChannel} />
               </div>
 	              <div className="space-y-2">
 	                <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">Link (opcional)</label>
@@ -1424,136 +1551,157 @@ const Calendar: React.FC<CalendarProps> = ({
 
             <div className="space-y-2">
               <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">Horário</label>
-              {slots.length === 0 ? (
-                <div className="text-sm text-gray-600 dark:text-slate-300 flex items-center gap-2">
-                  <AlertTriangle className="w-4 h-4 text-amber-400" />
-                  Ajuste sua disponibilidade em Configuração.
-                </div>
-              ) : (
-                <div className="flex flex-wrap gap-2">
-                  {slots.map((s) => (
-                    <button
-                      key={s.iso}
-                      type="button"
-                      disabled={s.disabled}
-                      onClick={() => setSlotIso(s.iso)}
-                      className={`px-3 py-2 rounded-lg text-sm font-semibold border transition ${
-                        slotIso === s.iso
-                          ? 'glass-purple text-white border-transparent'
-                          : s.disabled
-                            ? 'bg-slate-500/10 border-slate-400/30 text-slate-500 cursor-not-allowed'
-                            : 'bg-emerald-500/10 border-emerald-400/40 text-emerald-600 dark:text-emerald-200 hover:bg-emerald-500/15'
-                      }`}
-                    >
-                      {s.label}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            <div className="glass-panel bg-white/60 dark:bg-white/5 border border-white/20 rounded-xl p-4 space-y-3">
-              <div className="flex items-center justify-between gap-3 flex-wrap">
-                <p className="text-sm font-semibold text-gray-900 dark:text-slate-50">Vincular lead (opcional)</p>
-                {selectedLeadPreview ? (
-                  <span className="text-xs text-gray-600 dark:text-slate-300">ID: {selectedLeadPreview.id}</span>
-                ) : null}
-              </div>
-              <div className="relative">
-                <input
-                  value={leadSearch}
-                  onChange={(e) => {
-                    setLeadSearch(e.target.value);
-                    setSelectedLeadId('');
-                  }}
-                  className="w-full rounded-lg border border-white/30 dark:border-white/20 bg-white/80 dark:bg-white/15 px-3 py-2 text-sm text-gray-800 dark:text-slate-100"
-                  placeholder="Buscar lead por empresa/nome…"
-                />
-                {filteredLeadSuggestions.length > 0 && !selectedLeadId ? (
-                  <div className="absolute z-20 mt-2 w-full rounded-xl border border-white/20 bg-white/95 dark:bg-slate-900/95 shadow-xl overflow-hidden">
-                    {filteredLeadSuggestions.map((l) => (
-                      <button
-                        type="button"
-                        key={l.id}
-                        onClick={() => selectLead(l)}
-                        className="w-full text-left px-4 py-2 text-sm hover:bg-purple-50 dark:hover:bg-purple-500/10 text-gray-800 dark:text-slate-100"
-                      >
-                        <span className="font-semibold">{l.company}</span> <span className="text-gray-500 dark:text-slate-300">• {l.name}</span>
-                      </button>
-                    ))}
-                  </div>
-                ) : null}
-              </div>
-              <p className="text-[11px] text-gray-500 dark:text-slate-300">Se escolher um lead, o status muda para “Aguardando”.</p>
-            </div>
+	              {slots.length === 0 ? (
+	                <div className="text-sm text-gray-600 dark:text-slate-300 flex items-center gap-2">
+	                  <AlertTriangle className="w-4 h-4 text-amber-400" />
+	                  Ajuste sua disponibilidade em Configuração.
+	                </div>
+		              ) : (
+		                <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2 w-fit max-w-full">
+		                  {slots.map((s) => {
+	                      const selected = slotIso === s.iso;
+	                      const [hhRaw, mmRaw] = (s.label || '').split(':');
+	                      const hour = Number(hhRaw);
+	                      const minute = Number(mmRaw);
+	                      const hour12 = Number.isFinite(hour) ? (hour % 12) || 12 : null;
+	                      const ampm = !Number.isFinite(hour) ? '' : hour >= 12 ? 'PM' : 'AM';
+	                      const displayTime =
+	                        hour12 && Number.isFinite(minute) ? `${hour12}:${pad2(minute)}` : s.label;
+	                      const icon = selected ? (
+	                        <CheckCircle2 className="w-4 h-4" />
+	                      ) : s.disabled ? (
+	                        <X className="w-4 h-4" />
+	                      ) : (
+	                        <Clock3 className="w-4 h-4" />
+	                      );
+	                      const iconClass = selected
+	                        ? 'text-white'
+	                        : s.disabled
+	                          ? 'text-slate-500'
+	                          : 'text-purple-500 dark:text-purple-300';
+	                      return (
+	                        <button
+	                          key={s.iso}
+	                          type="button"
+	                          disabled={s.disabled}
+	                          onClick={() => setSlotIso(s.iso)}
+	                          className={`px-2.5 py-2 rounded-xl text-sm font-semibold border transition w-[108px] flex items-center justify-center gap-2 ${
+	                            selected
+	                              ? 'glass-purple text-white border-transparent shadow-lg shadow-purple-900/20'
+	                              : s.disabled
+	                                ? 'bg-slate-500/10 border-slate-400/30 text-slate-500 cursor-not-allowed'
+	                                : 'bg-purple-500/10 border-purple-400/40 text-purple-800 dark:text-purple-100 hover:bg-purple-500/15 hover:shadow-md'
+	                          }`}
+	                        >
+	                          <span className="flex items-center gap-2 min-w-0">
+	                            <span className={iconClass}>{icon}</span>
+	                            <span className="tabular-nums">{displayTime}</span>
+	                            {ampm ? (
+	                              <span
+	                                className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full border ${
+	                                  selected
+	                                    ? 'border-white/30 bg-white/10 text-white/90'
+	                                    : s.disabled
+	                                      ? 'border-slate-400/30 bg-slate-500/10 text-slate-500'
+	                                      : 'border-purple-400/30 bg-purple-500/10 text-purple-800 dark:text-purple-100'
+	                                }`}
+	                              >
+	                                {ampm}
+	                              </span>
+	                            ) : null}
+	                          </span>
+	                        </button>
+	                      );
+	                    })}
+		                </div>
+		              )}
+		            </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="md:col-span-2 space-y-2">
                 <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">Nome do lead</label>
-                <input
-                  value={leadForm.name}
-                  onChange={(e) => setLeadForm((p) => ({ ...p, name: e.target.value }))}
-                  className="w-full rounded-lg border border-white/30 dark:border-white/20 bg-white/80 dark:bg-white/15 px-3 py-2 text-sm text-gray-800 dark:text-slate-100"
-                  placeholder="Ex: João Silva"
-                />
+                <div className="relative">
+                  <User className="w-4 h-4 text-purple-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <input
+                    value={leadForm.name}
+                    onChange={(e) => setLeadForm((p) => ({ ...p, name: e.target.value }))}
+                    className="w-full pl-10 rounded-lg border border-white/30 dark:border-white/20 bg-white/80 dark:bg-white/15 px-3 py-2 text-sm text-gray-800 dark:text-slate-100"
+                    placeholder="Ex: João Silva"
+                  />
+                </div>
               </div>
               <div className="space-y-2">
                 <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">Duração (min)</label>
-                <input
-                  type="number"
-                  min={5}
-                  max={240}
-                  value={durationMinutes}
-                  onChange={(e) => setDurationMinutes(Number(e.target.value) || 30)}
-                  className="w-full rounded-lg border border-white/30 dark:border-white/20 bg-white/80 dark:bg-white/15 px-3 py-2 text-sm text-gray-800 dark:text-slate-100"
-                />
+                <div className="relative">
+                  <Clock3 className="w-4 h-4 text-purple-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <input
+                    type="number"
+                    min={5}
+                    max={240}
+                    value={durationMinutes}
+                    onChange={(e) => setDurationMinutes(Number(e.target.value) || 30)}
+                    className="w-full pl-10 rounded-lg border border-white/30 dark:border-white/20 bg-white/80 dark:bg-white/15 px-3 py-2 text-sm text-gray-800 dark:text-slate-100"
+                  />
+                </div>
               </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-	              <div className="space-y-2">
-	                <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">Email</label>
-	                <input
-	                  type="email"
-	                  autoComplete="email"
-	                  value={leadForm.email}
-	                  onChange={(e) => setLeadForm((p) => ({ ...p, email: e.target.value }))}
-	                  className="w-full rounded-lg border border-white/30 dark:border-white/20 bg-white/80 dark:bg-white/15 px-3 py-2 text-sm text-gray-800 dark:text-slate-100"
-	                  placeholder="contato@empresa.com"
-	                />
-	              </div>
-	              <div className="space-y-2">
-	                <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">Telefone</label>
-	                <input
-	                  type="tel"
-	                  inputMode="tel"
-	                  autoComplete="tel"
-	                  value={leadForm.phone}
-	                  onChange={(e) => setLeadForm((p) => ({ ...p, phone: e.target.value }))}
-	                  className="w-full rounded-lg border border-white/30 dark:border-white/20 bg-white/80 dark:bg-white/15 px-3 py-2 text-sm text-gray-800 dark:text-slate-100"
-	                  placeholder="(11) 99999-9999"
-	                />
-	              </div>
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">Email</label>
+                <div className="relative">
+                  <Mail className="w-4 h-4 text-purple-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <input
+                    type="email"
+                    autoComplete="email"
+                    value={leadForm.email}
+                    onChange={(e) => setLeadForm((p) => ({ ...p, email: e.target.value }))}
+                    className="w-full pl-10 rounded-lg border border-white/30 dark:border-white/20 bg-white/80 dark:bg-white/15 px-3 py-2 text-sm text-gray-800 dark:text-slate-100"
+                    placeholder="contato@empresa.com"
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">Telefone</label>
+                <div className="relative">
+                  <Phone className="w-4 h-4 text-purple-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <input
+                    type="tel"
+                    inputMode="tel"
+                    autoComplete="tel"
+                    value={leadForm.phone}
+                    onChange={(e) => setLeadForm((p) => ({ ...p, phone: e.target.value }))}
+                    className="w-full pl-10 rounded-lg border border-white/30 dark:border-white/20 bg-white/80 dark:bg-white/15 px-3 py-2 text-sm text-gray-800 dark:text-slate-100"
+                    placeholder="(11) 99999-9999"
+                  />
+                </div>
+              </div>
               <div className="space-y-2">
                 <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">Empresa</label>
-                <input
-                  value={leadForm.company}
-                  onChange={(e) => setLeadForm((p) => ({ ...p, company: e.target.value }))}
-                  className="w-full rounded-lg border border-white/30 dark:border-white/20 bg-white/80 dark:bg-white/15 px-3 py-2 text-sm text-gray-800 dark:text-slate-100"
-                  placeholder="Nome da empresa"
-                />
+                <div className="relative">
+                  <Building2 className="w-4 h-4 text-purple-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <input
+                    value={leadForm.company}
+                    onChange={(e) => setLeadForm((p) => ({ ...p, company: e.target.value }))}
+                    className="w-full pl-10 rounded-lg border border-white/30 dark:border-white/20 bg-white/80 dark:bg-white/15 px-3 py-2 text-sm text-gray-800 dark:text-slate-100"
+                    placeholder="Nome da empresa"
+                  />
+                </div>
               </div>
             </div>
 
             <div className="space-y-2">
               <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">Observações</label>
-              <textarea
-                value={leadForm.notes}
-                onChange={(e) => setLeadForm((p) => ({ ...p, notes: e.target.value }))}
-                className="w-full rounded-lg border border-white/30 dark:border-white/20 bg-white/80 dark:bg-white/15 px-3 py-2 text-sm text-gray-800 dark:text-slate-100 resize-none"
-                rows={2}
-                placeholder="Contexto, objetivo, próximos passos..."
-              />
+              <div className="relative">
+                <FileText className="w-4 h-4 text-purple-400 absolute left-3 top-3 pointer-events-none" />
+                <textarea
+                  value={leadForm.notes}
+                  onChange={(e) => setLeadForm((p) => ({ ...p, notes: e.target.value }))}
+                  className="w-full pl-10 rounded-lg border border-white/30 dark:border-white/20 bg-white/80 dark:bg-white/15 px-3 py-2 text-sm text-gray-800 dark:text-slate-100 resize-none"
+                  rows={2}
+                  placeholder="Contexto, objetivo, próximos passos..."
+                />
+              </div>
             </div>
 
             {error ? (
@@ -1585,7 +1733,7 @@ const Calendar: React.FC<CalendarProps> = ({
                 {dayAppointments.map((a) => (
                   <div
                     key={a.id}
-                    className="glass-panel bg-white/60 dark:bg-white/5 border border-white/20 rounded-xl p-3 flex items-start justify-between gap-3"
+                    className="glass-panel bg-white/45 dark:bg-white/5 backdrop-blur-xl border border-white/20 rounded-2xl p-3 flex items-start justify-between gap-3"
                   >
                     <div>
                       <p className="text-sm font-semibold text-gray-900 dark:text-slate-50">
