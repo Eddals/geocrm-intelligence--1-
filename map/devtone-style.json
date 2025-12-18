@@ -1,0 +1,46 @@
+{
+  "version": 8,
+  "name": "Devtone Leads Dark",
+  "sources": {
+    "osm": {
+      "type": "raster",
+      "tiles": [
+        "https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png",
+        "https://b.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png",
+        "https://c.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png",
+        "https://d.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png"
+      ],
+      "tileSize": 256,
+      "maxzoom": 19,
+      "attribution": "© OpenStreetMap © CARTO"
+    }
+  },
+  "layers": [
+    {
+      "id": "background",
+      "type": "background",
+      "paint": {
+        "background-color": "#0b1024"
+      }
+    },
+    {
+      "id": "osm-base",
+      "type": "raster",
+      "source": "osm",
+      "paint": {
+<<<<<<< ours
+        "raster-opacity": 0.98,
+        "raster-brightness-min": 0.1,
+        "raster-brightness-max": 0.85,
+        "raster-saturation": -0.15,
+        "raster-contrast": 0.12
+=======
+        "raster-opacity": 0.9,
+        "raster-brightness-max": 0.9,
+        "raster-saturation": -0.2,
+        "raster-contrast": 0.05
+>>>>>>> theirs
+      }
+    }
+  ]
+}

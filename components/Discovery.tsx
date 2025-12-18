@@ -355,7 +355,7 @@ const Discovery: React.FC<DiscoveryProps> = ({ addLeads, openAiKey, setDiscovery
               </div>
 
               {/* Region filters laid out horizontally */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                 <div className="relative" ref={countryRef}>
                     <button
                         type="button"
@@ -370,21 +370,28 @@ const Discovery: React.FC<DiscoveryProps> = ({ addLeads, openAiKey, setDiscovery
                     </button>
                     
                     {isCountryOpen && (
-                        <div className="absolute top-full left-0 w-full mt-1 bg-white border border-gray-200 rounded-xl shadow-lg z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-100">
-                            {Object.entries(LOCATIONS).map(([code, data]) => (
-                                <div
-                                    key={code}
-                                    onClick={() => {
-                                        setCountry(code as 'BR' | 'US');
-                                        setIsCountryOpen(false);
-                                    }}
-                                    className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 cursor-pointer transition-colors"
-                                >
-                                    <img src={data.flag} alt={code} className="w-5 h-auto rounded-sm shadow-sm" />
-                                    <span className="text-sm font-medium text-gray-700">{data.name}</span>
-                                    {country === code && <CheckCircle className="w-3 h-3 text-indigo-600 ml-auto" />}
-                                </div>
-                            ))}
+                        <div className="absolute top-full left-0 w-full mt-1 bg-white/95 dark:bg-slate-900/95 border border-gray-200 dark:border-slate-700 rounded-xl shadow-lg z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-100">
+                            {Object.entries(LOCATIONS).map(([code, data]) => {
+                                const isActive = country === code;
+                                return (
+                                    <div
+                                        key={code}
+                                        onClick={() => {
+                                            setCountry(code as 'BR' | 'US');
+                                            setIsCountryOpen(false);
+                                        }}
+                                        className={`flex items-center gap-3 px-4 py-3 cursor-pointer text-sm transition-colors ${
+                                            isActive
+                                                ? 'bg-indigo-50 text-indigo-700 font-medium dark:bg-indigo-900/40 dark:text-indigo-100'
+                                                : 'text-gray-700 dark:text-slate-100 hover:bg-purple-50 hover:text-purple-700 dark:hover:bg-purple-500/20 dark:hover:text-white'
+                                        }`}
+                                    >
+                                        <img src={data.flag} alt={code} className="w-5 h-auto rounded-sm shadow-sm" />
+                                        <span className="text-sm font-medium">{data.name}</span>
+                                        {isActive && <CheckCircle className="w-3 h-3 text-indigo-600 ml-auto" />}
+                                    </div>
+                                );
+                            })}
                         </div>
                     )}
                 </div>
@@ -410,7 +417,7 @@ const Discovery: React.FC<DiscoveryProps> = ({ addLeads, openAiKey, setDiscovery
                                 className={`px-4 py-2.5 cursor-pointer text-sm transition-colors ${
                                     !region
                                     ? 'bg-indigo-50 text-indigo-700 font-medium dark:bg-indigo-900/40 dark:text-indigo-100'
-                                    : 'text-gray-700 dark:text-slate-100 hover:bg-indigo-50 hover:text-indigo-700 dark:hover:bg-indigo-900/30 dark:hover:text-white'
+                                    : 'text-gray-700 dark:text-slate-100 hover:bg-purple-50 hover:text-purple-700 dark:hover:bg-purple-500/20 dark:hover:text-white'
                                 }`}
                             >
                                 Estado (Todos)
@@ -425,7 +432,7 @@ const Discovery: React.FC<DiscoveryProps> = ({ addLeads, openAiKey, setDiscovery
                                     className={`px-4 py-2.5 cursor-pointer text-sm transition-colors ${
                                         region === s
                                         ? 'bg-indigo-50 text-indigo-700 font-medium dark:bg-indigo-900/40 dark:text-indigo-100'
-                                        : 'text-gray-700 dark:text-slate-100 hover:bg-indigo-50 hover:text-indigo-700 dark:hover:bg-indigo-900/30 dark:hover:text-white'
+                                        : 'text-gray-700 dark:text-slate-100 hover:bg-purple-50 hover:text-purple-700 dark:hover:bg-purple-500/20 dark:hover:text-white'
                                     }`}
                                 >
                                     {s}
@@ -442,15 +449,6 @@ const Discovery: React.FC<DiscoveryProps> = ({ addLeads, openAiKey, setDiscovery
                     className="w-full pl-9 pr-4 py-3 border border-gray-200 rounded-xl bg-transparent text-gray-900 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all"
                     value={city}
                     onChange={(e) => setCity(e.target.value)}
-                    />
-                </div>
-                <div className="relative">
-                    <input
-                        type="text"
-                        placeholder="Nicho (ex: Clínicas de Estética, Restaurantes...)"
-                        className="w-full px-3 py-3 border border-gray-200 rounded-xl bg-transparent text-gray-900 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all"
-                        value={industry}
-                        onChange={(e) => setIndustry(e.target.value)}
                     />
                 </div>
               </div>
@@ -597,7 +595,11 @@ const Discovery: React.FC<DiscoveryProps> = ({ addLeads, openAiKey, setDiscovery
                     <button 
                         onClick={handleImport}
                         disabled={selectedIndices.length === 0}
-                        className="bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-300 disabled:text-gray-500 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
+                        className={`px-4 py-2 rounded-lg text-sm font-semibold flex items-center gap-2 transition-all ${
+                          selectedIndices.length === 0
+                            ? 'bg-white/10 text-gray-500 border border-white/20 cursor-not-allowed'
+                            : 'glass-purple text-white border border-purple-200/60 shadow-lg'
+                        }`}
                     >
                         <Download className="w-4 h-4" /> Importar ({selectedIndices.length})
                     </button>

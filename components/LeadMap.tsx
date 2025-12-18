@@ -1,904 +1,931 @@
-
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Lead, PipelineStage } from '../types';
-import { MapPin, Layers, Maximize2, Search, Loader2, User, Filter, ListOrdered, ChevronDown, Check, CheckCircle2 } from 'lucide-react';
-import { findNearbyPlacesWithPerplexity } from '../services/perplexityService';
+import maplibregl from 'maplibre-gl';
+import 'maplibre-gl/dist/maplibre-gl.css';
+
+<<<<<<< ours
+type SelectedLead = Partial<Lead>;
+=======
+type LeadStatus = 'Quente' | 'Morno' | 'Frio';
+
+type SelectedLead = {
+  company: string;
+  city: string;
+  state: string;
+  status: LeadStatus;
+  value: string;
+};
+>>>>>>> theirs
+
+type Filters = {
+  status: string;
+  minValue: number;
+  sector: string | null;
+  location: string;
+  state: string;
+};
+
+type DropdownId = keyof Filters;
+
+type DropdownOption = {
+  label: string;
+  value: string;
+};
+
+const BR_UF = ['AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MT', 'MS', 'MG', 'PA', 'PB', 'PR', 'PE', 'PI', 'RJ', 'RN', 'RS', 'RO', 'RR', 'SC', 'SP', 'SE', 'TO'] as const;
+
+const formatThousands = (value: number) => value.toLocaleString('pt-BR');
+
+const parseNumberLoose = (value: unknown) => {
+  if (typeof value === 'number') return value;
+  if (typeof value !== 'string') return NaN;
+  const cleaned = value.replace(/[^\d.,-]/g, '').replace(/\./g, '').replace(',', '.');
+  const n = Number(cleaned);
+  return Number.isFinite(n) ? n : NaN;
+};
+
+const formatBRL = (value: unknown) => {
+  const n = parseNumberLoose(value);
+  if (!Number.isFinite(n)) return '—';
+  return n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 0 });
+};
+
+const extractUF = (text: string) => {
+  const upper = String(text || '').toUpperCase();
+  for (const uf of BR_UF) {
+    if (new RegExp(`\\b${uf}\\b`).test(upper)) return uf;
+  }
+  return '';
+};
+
+const Icon = {
+  Search: (p: any) => (
+    <svg viewBox="0 0 24 24" fill="none" {...p}>
+      <path d="M10.5 18a7.5 7.5 0 1 1 0-15 7.5 7.5 0 0 1 0 15Z" stroke="currentColor" strokeWidth="2" />
+      <path d="M16.5 16.5 21 21" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+    </svg>
+  ),
+  Chevron: (p: any) => (
+    <svg viewBox="0 0 24 24" fill="none" {...p}>
+      <path d="m7 10 5 5 5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  ),
+  Plus: (p: any) => (
+    <svg viewBox="0 0 24 24" fill="none" {...p}>
+      <path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+    </svg>
+  ),
+  Minus: (p: any) => (
+    <svg viewBox="0 0 24 24" fill="none" {...p}>
+      <path d="M5 12h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+    </svg>
+  ),
+  Layers: (p: any) => (
+    <svg viewBox="0 0 24 24" fill="none" {...p}>
+      <path d="M12 3 3 8l9 5 9-5-9-5Z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
+      <path d="M3 12l9 5 9-5" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
+      <path d="M3 16l9 5 9-5" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
+    </svg>
+  ),
+  Home: (p: any) => (
+    <svg viewBox="0 0 24 24" fill="none" {...p}>
+      <path
+        d="M3 10.5 12 3l9 7.5V21a1.5 1.5 0 0 1-1.5 1.5h-4.5v-7.5h-6v7.5H4.5A1.5 1.5 0 0 1 3 21V10.5Z"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinejoin="round"
+      />
+    </svg>
+  ),
+  Flame: (p: any) => (
+    <svg viewBox="0 0 24 24" fill="none" {...p}>
+      <path
+        d="M12 22c4.418 0 8-3.134 8-7 0-2.57-1.43-4.1-3-5.5-1.4-1.246-2.5-2.4-2.5-4.5C14.5 3.343 13.6 2 12 1c.2 2.4-1.2 4-2.6 5.4C7.7 8.1 6 9.8 6 13c0 4.418 2.582 9 6 9Z"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinejoin="round"
+      />
+    </svg>
+  ),
+  List: (p: any) => (
+    <svg viewBox="0 0 24 24" fill="none" {...p}>
+      <path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+    </svg>
+  )
+};
+
+<<<<<<< ours
+function ControlButton({ children, onClick }: { children: React.ReactNode; onClick?: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="grid place-items-center h-11 w-11 rounded-2xl border border-white/10 bg-white/[0.04] text-white/90 shadow-[0_12px_40px_rgba(0,0,0,0.35)] backdrop-blur hover:bg-white/[0.07] transition"
+    >
+      {children}
+    </button>
+=======
+function StatPill({ icon, label, value, tone = 'violet' }: { icon: React.ReactNode; label: string; value: string; tone?: 'red' | 'amber' | 'blue' | 'violet' }) {
+  const toneMap = {
+    red: 'text-red-300/90',
+    amber: 'text-amber-300/90',
+    blue: 'text-blue-300/90',
+    violet: 'text-violet-300/90'
+  }[tone];
+
+  return (
+    <div className="flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-white/[0.04] px-3 py-3 shadow-[0_0_0_1px_rgba(255,255,255,0.05)]">
+      <div className="flex items-center gap-2">
+        <div className={`h-8 w-8 grid place-items-center rounded-lg bg-white/[0.05] ${toneMap}`}>{icon}</div>
+        <div className="text-sm text-white/80">{label}</div>
+      </div>
+      <div className="text-sm font-semibold text-white">{value}</div>
+    </div>
+  );
+}
+
+function SelectRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center justify-between rounded-xl border border-white/10 bg-white/[0.04] px-3 py-3">
+      <div className="text-sm text-white/70">{label}</div>
+      <div className="flex items-center gap-2 text-sm text-white/85">
+        <span>{value}</span>
+        <Icon.Chevron className="h-4 w-4 text-white/60" />
+      </div>
+    </div>
+>>>>>>> theirs
+  );
+}
+
+<<<<<<< ours
+function TogglePill({
+  active,
+  onClick,
+  children
+}: {
+  active: boolean;
+  onClick?: () => void;
+  children: React.ReactNode;
+}) {
+<<<<<<< ours
+=======
+=======
+function GlowButton({ children, onClick, variant = 'primary' }: { children: React.ReactNode; onClick?: () => void; variant?: 'primary' | 'ghost' }) {
+>>>>>>> theirs
+  if (variant === 'ghost') {
+    return (
+      <button
+        onClick={onClick}
+        className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2 text-sm font-medium text-white/85 hover:bg-white/[0.06] transition"
+      >
+        {children}
+      </button>
+    );
+  }
+
+>>>>>>> theirs
+  return (
+    <button
+      onClick={onClick}
+<<<<<<< ours
+<<<<<<< ours
+      className={`flex items-center gap-2 rounded-full px-3 py-2 text-sm font-semibold transition ${
+        active ? 'glass-purple text-white shadow-[0_16px_60px_-20px_rgba(168,85,247,0.9)]' : 'text-white/70 hover:bg-white/[0.08]'
+      }`}
+=======
+      disabled={disabled}
+      className={`relative inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold text-white
+      bg-gradient-to-b from-violet-500/90 to-violet-600/90
+      shadow-[0_18px_60px_-18px_rgba(139,92,246,0.8)]
+      hover:from-violet-500 hover:to-violet-700 transition disabled:opacity-60 disabled:hover:from-violet-500/90 disabled:hover:to-violet-600/90 ${className}`}
+>>>>>>> theirs
+=======
+      className="relative inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold text-white
+      bg-gradient-to-b from-violet-500/90 to-violet-600/90
+      shadow-[0_18px_60px_-18px_rgba(139,92,246,0.8)]
+      hover:from-violet-500 hover:to-violet-700 transition"
+>>>>>>> theirs
+    >
+      <span className="absolute inset-0 rounded-xl ring-1 ring-white/10" />
+      <span className="absolute -inset-px rounded-xl opacity-60 blur-md bg-gradient-to-r from-violet-500/40 via-fuchsia-400/30 to-indigo-400/30" />
+      <span className="relative">{children}</span>
+    </button>
+  );
+}
+
+<<<<<<< ours
+function DropdownRow({
+  id,
+  label,
+  value,
+  open,
+  options,
+  onToggle,
+  onSelect
+}: {
+  id: DropdownId;
+  label: string;
+  value: string;
+  open: boolean;
+  options: DropdownOption[];
+  onToggle: (id: DropdownId) => void;
+  onSelect: (id: DropdownId, value: string) => void;
+}) {
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => onToggle(id)}
+        className={`w-full flex items-center justify-between gap-6 rounded-[28px] border px-6 py-5 backdrop-blur transition ${
+          open
+            ? 'border-violet-400/50 bg-white/[0.08]'
+            : 'border-white/10 bg-gradient-to-b from-white/[0.07] to-white/[0.03] hover:bg-white/[0.06]'
+        }`}
+      >
+        <span className="text-lg font-medium text-white/55">{label}</span>
+        <div className="flex items-center gap-3 text-white">
+          <span className="text-lg font-semibold text-white/90">{value}</span>
+          <Icon.Chevron className={`h-5 w-5 text-white/55 transition-transform ${open ? 'rotate-180' : ''}`} />
+        </div>
+      </button>
+
+      {open ? (
+        <div className="absolute top-full left-0 right-0 mt-2 z-50 overflow-hidden rounded-2xl border border-white/10 bg-[#0b0b1f]/95 backdrop-blur-xl shadow-[0_30px_80px_rgba(0,0,0,0.65)]">
+          {options.map((opt) => (
+            <button
+              type="button"
+              key={`${id}-${opt.value}`}
+              onClick={() => onSelect(id, opt.value)}
+              className="w-full text-left px-4 py-3 text-sm text-white/85 hover:bg-white/[0.08] transition"
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
 
 interface LeadMapProps {
   leads: Lead[];
   discoveryResults?: Partial<Lead>[];
-  openAiKey?: string;
   addLead?: (lead: Partial<Lead>) => void;
   notify?: (msg: string, type?: 'success' | 'info' | 'warning') => void;
 }
 
-const INDUSTRIES = [
-    "Tecnologia e Software",
-    "Saúde e Medicina",
-    "Imobiliário",
-    "Restaurantes e Alimentação",
-    "Varejo e E-commerce",
-    "Construção e Engenharia",
-    "Serviços Financeiros",
-    "Serviços Jurídicos",
-    "Marketing e Publicidade",
-    "Educação",
-    "Indústria e Manufatura",
-    "Logística e Transporte",
-    "Turismo e Hotelaria"
-];
+<<<<<<< ours
+export default function LeadMap({ leads, discoveryResults = [], addLead }: LeadMapProps) {
+  const [selected, setSelected] = useState<SelectedLead | null>(null);
+  const [selectedFeatureId, setSelectedFeatureId] = useState<string | undefined>(undefined);
+  const [showHeatmap, setShowHeatmap] = useState(true);
+  const [showClusters, setShowClusters] = useState(true);
+  const mapApiRef = useRef<{ zoomIn: () => void; zoomOut: () => void; fitToData: () => void } | null>(null);
 
-// Data for Countries and States
-const LOCATIONS = {
-    BR: {
-        name: "Brasil",
-        flag: "https://flagcdn.com/w20/br.png",
-        states: [
-            "AC", "AL", "AP", "AM", "BA", "CE", "DF", "ES", "GO", "MA", "MT", "MS", "MG", "PA", "PB", "PR", "PE", "PI", "RJ", "RN", "RS", "RO", "RR", "SC", "SP", "SE", "TO"
-        ]
-    },
-    US: {
-        name: "USA",
-        flag: "https://flagcdn.com/w20/us.png",
-        states: [
-            "AL", "AK", "AZ", "AR", "CA", "CO", "CT", "DE", "FL", "GA", "HI", "ID", "IL", "IN", "IA", "KS", "KY", "LA", "ME", "MD", "MA", "MI", "MN", "MS", "MO", "MT", "NE", "NV", "NH", "NJ", "NM", "NY", "NC", "ND", "OH", "OK", "OR", "PA", "RI", "SC", "SD", "TN", "TX", "UT", "VT", "VA", "WA", "WV", "WI", "WY"
-        ]
-    }
-};
+  const [searchTerm, setSearchTerm] = useState('');
+  const [openDropdown, setOpenDropdown] = useState<DropdownId | null>(null);
+  const panelRef = useRef<HTMLDivElement | null>(null);
+  const [filters, setFilters] = useState<Filters>({
+    status: 'Todos',
+    minValue: 5000,
+    sector: null,
+    location: 'Brasil',
+    state: 'SP'
+  });
 
-const LeadMap: React.FC<LeadMapProps> = ({ leads, discoveryResults = [], openAiKey, addLead, notify }) => {
-  const mapContainerRef = useRef<HTMLDivElement>(null);
-  const mapInstanceRef = useRef<any>(null);
-  const markersRef = useRef<any[]>([]);
-  const heatLayerRef = useRef<any>(null);
-  const [tileError, setTileError] = useState(false);
-  
-  // Dropdown Refs
-  const dropdownRef = useRef<HTMLDivElement>(null);
-  const countryRef = useRef<HTMLDivElement>(null);
-  const regionRef = useRef<HTMLDivElement>(null);
-  
-  const [mapType, setMapType] = useState<'street' | 'satellite'>('street');
-  const [selectedLead, setSelectedLead] = useState<Partial<Lead> | null>(null);
-  
-  // Search State
-  const [searchQuery, setSearchQuery] = useState('');
-  const [searchIndustry, setSearchIndustry] = useState('');
-  const [searchLimit, setSearchLimit] = useState<number | string>(5);
-  const [isSearching, setIsSearching] = useState(false);
-  const [aiPlaces, setAiPlaces] = useState<Partial<Lead>[]>([]);
-  const [routePlan, setRoutePlan] = useState<Partial<Lead>[]>([]);
-  const [proximityAlerts, setProximityAlerts] = useState<string[]>([]);
-  const [searchRadius, setSearchRadius] = useState<number>(2);
-  
-  // Location Filters
-  const [country, setCountry] = useState<'BR' | 'US'>('BR');
-  const [region, setRegion] = useState('');
+  useEffect(() => {
+    const onDown = (e: MouseEvent) => {
+      const target = e.target as Node | null;
+      if (!target) return;
+      if (!panelRef.current?.contains(target)) setOpenDropdown(null);
+    };
+    document.addEventListener('mousedown', onDown);
+    return () => document.removeEventListener('mousedown', onDown);
+  }, []);
 
-  // Dropdown States
-  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
-  const [isCountryOpen, setIsCountryOpen] = useState(false);
-  const [isRegionOpen, setIsRegionOpen] = useState(false);
-  const [statusFilter, setStatusFilter] = useState<'all' | PipelineStage>('all');
-  const [minValue, setMinValue] = useState<number>(0);
-  const [tagFilter, setTagFilter] = useState<string>('');
-
-  // Filter leads that have valid coordinates
-  const validLeads = useMemo(() => leads.filter(l => l.lat !== 0 && l.lng !== 0), [leads]);
-  const allMapPoints = useMemo(
-    () => [...validLeads, ...discoveryResults, ...aiPlaces],
-    [validLeads, discoveryResults, aiPlaces]
+  const allLeads = useMemo(
+    () => [...(leads || []), ...(discoveryResults || [])].filter((l) => Number.isFinite(l.lat) && Number.isFinite(l.lng)),
+    [leads, discoveryResults]
   );
-  const filteredPoints = useMemo(() => {
-    return allMapPoints.filter((lead) => {
-      if (!lead.lat || !lead.lng) return false;
-      if (statusFilter !== 'all' && lead.id && lead.status !== statusFilter) return false;
-      if (minValue > 0 && lead.id && (lead.value || 0) < minValue) return false;
-      if (tagFilter && lead.tags && lead.tags.length > 0) {
-        const match = lead.tags.some((t) => t.toLowerCase().includes(tagFilter.toLowerCase()));
-        if (!match) return false;
+=======
+export default function LeadMap({ leads, discoveryResults = [], addLead, notify }: LeadMapProps) {
+=======
+export default function DevtoneMapDashboard() {
+>>>>>>> theirs
+  const [selected, setSelected] = useState<SelectedLead>({
+    company: 'TechCorp Solutions',
+    city: 'São Paulo',
+    state: 'SP',
+    status: 'Quente',
+    value: 'R$ 15.000'
+  });
+
+<<<<<<< ours
+  const allLeads = useMemo(() => [...(leads || []), ...(discoveryResults || [])].filter((l) => Number.isFinite(l.lat) && Number.isFinite(l.lng)), [leads, discoveryResults]);
+>>>>>>> theirs
+
+  const sectorOptions = useMemo(() => {
+    const tags = new Set<string>();
+    allLeads.forEach((lead) => {
+      (lead.tags || []).forEach((tag) => {
+        const t = String(tag || '').trim();
+        if (!t) return;
+        tags.add(t);
+      });
+    });
+    return Array.from(tags).sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  }, [allLeads]);
+
+  const statusOptions = useMemo(() => {
+    const values = ['Todos', 'Quente', 'Morno', 'Frio', ...Object.values(PipelineStage)];
+    return Array.from(new Set(values)).map((v) => ({ label: v, value: v }));
+  }, []);
+
+  const minValueOptions = useMemo<DropdownOption[]>(
+    () => [0, 5000, 10000, 20000, 50000, 100000].map((n) => ({ value: String(n), label: formatThousands(n) })),
+    []
+  );
+
+  const locationOptions = useMemo<DropdownOption[]>(() => [{ value: 'Brasil', label: 'Brasil' }, { value: 'USA', label: 'USA' }], []);
+
+  const ufOptions = useMemo<DropdownOption[]>(() => {
+    const values = ['Todos', ...BR_UF];
+    return values.map((uf) => ({ value: uf, label: uf }));
+  }, []);
+
+  const sectorDropdownOptions = useMemo<DropdownOption[]>(() => {
+    const opts = [{ value: '', label: 'Selecionar' }, ...sectorOptions.map((t) => ({ value: t, label: t }))];
+    return opts;
+  }, [sectorOptions]);
+
+  const visibleLeads = useMemo(() => {
+    const q = searchTerm.trim().toLowerCase();
+    const status = filters.status;
+    const minValue = Number.isFinite(filters.minValue) ? filters.minValue : 0;
+    const sector = filters.sector;
+    const uf = filters.state;
+
+    return allLeads.filter((lead) => {
+      if (q) {
+        const hay = `${lead.company || ''} ${lead.city || ''} ${lead.address || ''}`.toLowerCase();
+        if (!hay.includes(q)) return false;
       }
+
+      if (status && status !== 'Todos') {
+        if (String(lead.status || '') !== status) return false;
+      }
+
+      if (minValue > 0) {
+        const v = parseNumberLoose((lead as any).value);
+        if (!Number.isFinite(v) || v < minValue) return false;
+      }
+
+      if (sector) {
+        const tags = (lead.tags || []).map((t) => String(t || '').toLowerCase());
+        if (!tags.includes(sector.toLowerCase())) return false;
+      }
+
+      if (uf && uf !== 'Todos') {
+        const hay = `${lead.city || ''} ${lead.address || ''}`.toUpperCase();
+        if (!new RegExp(`\\b${uf}\\b`).test(hay)) return false;
+      }
+
       return true;
     });
-  }, [allMapPoints, statusFilter, minValue, tagFilter]);
-  const filteredRealLeads = useMemo(() => filteredPoints.filter(p => p.id), [filteredPoints]);
-
-  const getMarkerColor = (lead: Partial<Lead>) => {
-    // If it's a "Ghost" lead (from AI search or Discovery)
-    if (!lead.id) {
-        if (aiPlaces.includes(lead)) return '#6b7280'; // Gray for Map Search Results
-        return '#94a3b8'; // Slate for Discovery
-    }
-
-    switch (lead.status) {
-      case PipelineStage.CLOSED: return '#10b981'; // Emerald
-      case PipelineStage.NEW: return '#3b82f6'; // Blue
-      case PipelineStage.LOST: return '#ef4444'; // Red
-      case PipelineStage.QUALIFIED: return '#a855f7'; // Purple
-      default: return '#f59e0b'; // Amber
-    }
-  };
+  }, [allLeads, filters.minValue, filters.sector, filters.state, filters.status, searchTerm]);
 
   useEffect(() => {
-    if (!mapContainerRef.current || mapInstanceRef.current) return;
+<<<<<<< ours
+    if (!visibleLeads.length) {
+      setSelected(null);
+      setSelectedFeatureId(undefined);
+      return;
+    }
 
-    // Initialize Map
-    // Default to a central location (e.g. Sao Paulo) if no leads, or the first lead
-    const initialLat = validLeads.length > 0 ? validLeads[0].lat : -23.5505;
-    const initialLng = validLeads.length > 0 ? validLeads[0].lng : -46.6333;
+    const selectedStillExists =
+      !!selectedFeatureId && visibleLeads.some((lead, idx) => getLeadFeatureId(lead, idx) === selectedFeatureId);
 
-    const L = (window as any).L;
-    if (!L) return;
+    if (!selectedStillExists) {
+      const first = visibleLeads[0];
+      setSelected(first);
+      setSelectedFeatureId(getLeadFeatureId(first, 0));
+      return;
+    }
 
-    const map = L.map(mapContainerRef.current).setView([initialLat, initialLng], 13);
-    mapInstanceRef.current = map;
+    const match = visibleLeads.find((lead, idx) => getLeadFeatureId(lead, idx) === selectedFeatureId);
+    if (match) setSelected(match);
+  }, [selectedFeatureId, visibleLeads]);
 
-    // Add Tiles
-    addTileLayer(map, 'street');
+  const totals = useMemo(
+    () => ({
+      leads: visibleLeads.length.toString(),
+      clusters: Math.max(1, Math.round(visibleLeads.length / 12)).toString()
+    }),
+<<<<<<< ours
+    [visibleLeads]
+=======
+    [allLeads]
+>>>>>>> theirs
+  );
 
-    // Force resize calculation after mount
-    const resizeTimer = setTimeout(() => {
-        if (mapInstanceRef.current) {
-            mapInstanceRef.current.invalidateSize();
-        }
-    }, 100);
+  const selectedDisplay = useMemo(() => {
+    if (!selected) return null;
+    const company = selected.company || 'Lead';
+    const city = selected.city || '';
+    const uf = extractUF(`${selected.address || ''} ${selected.city || ''}`) || filters.state;
+    const status = String((selected as any).status || '—');
+    const value = formatBRL((selected as any).value);
+    return { company, city, uf, status, value };
+  }, [filters.state, selected]);
 
-    return () => {
-      clearTimeout(resizeTimer);
-      map.remove();
-      mapInstanceRef.current = null;
+  const canAddSelected = useMemo(() => {
+    if (!addLead || !selected) return false;
+    if (selected.id) return !leads.some((l) => l.id === selected.id);
+    return true;
+  }, [addLead, leads, selected]);
+=======
+    if (!allLeads.length) return;
+    const first = allLeads[0];
+    setSelected({
+      company: first.company || 'Lead',
+      city: first.city,
+      state: '',
+      status: (first.status as LeadStatus) || 'Quente',
+      value: first.value ? first.value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 0 }) : '—'
+    });
+  }, [allLeads]);
+
+  const totals = useMemo(() => ({ leads: allLeads.length.toString(), clusters: Math.max(1, Math.round(allLeads.length / 12)).toString(), mode: 'Detecção Avançada' }), [allLeads]);
+=======
+  const totals = useMemo(() => ({ leads: '1.250', clusters: '25', mode: 'Detecção Avançada' }), []);
+>>>>>>> theirs
+  const mapRef = useRef<maplibregl.Map | null>(null);
+  const mapContainerRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!mapContainerRef.current || mapRef.current) return;
+    let map: maplibregl.Map | null = null;
+    try {
+      map = new maplibregl.Map({
+        container: mapContainerRef.current,
+        style: '/map/devtone-style.json',
+        center: [-46.6333, -23.5505],
+        zoom: 3.5,
+        attributionControl: false,
+        pitch: 0
+      });
+    } catch {
+      map = new maplibregl.Map({
+        container: mapContainerRef.current,
+        style: {
+          version: 8,
+          sources: {
+            osm: {
+              type: 'raster',
+              tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
+              tileSize: 256,
+              maxzoom: 19
+            }
+          },
+          layers: [
+            { id: 'background', type: 'background', paint: { 'background-color': '#0b0b1f' } },
+            { id: 'osm', type: 'raster', source: 'osm', paint: { 'raster-opacity': 0.9 } }
+          ]
+        } as any,
+        center: [-46.6333, -23.5505],
+        zoom: 3.5,
+        attributionControl: false
+      });
+    }
+    mapRef.current = map;
+
+    const resize = () => {
+      try {
+        map?.resize();
+      } catch {
+        /* ignore */
+      }
     };
-  }, []);
+    const ro = new ResizeObserver(resize);
+    ro.observe(mapContainerRef.current);
+    window.addEventListener('resize', resize);
+    return () => {
+      window.removeEventListener('resize', resize);
+      ro.disconnect();
+      map?.remove();
+      mapRef.current = null;
+    };
+<<<<<<< ours
+  }, [allLeads]);
 
-  // Update Tiles when mapType changes
   useEffect(() => {
-      if (!mapInstanceRef.current) return;
-      const L = (window as any).L;
-      
-      // Remove existing layers
-      mapInstanceRef.current.eachLayer((layer: any) => {
-          if (layer instanceof L.TileLayer) {
-              mapInstanceRef.current.removeLayer(layer);
-          }
+    const map = mapRef.current;
+    if (!map || !map.isStyleLoaded()) return;
+
+    const geojson = {
+      type: 'FeatureCollection',
+      features: allLeads.map((l, idx) => ({
+        type: 'Feature',
+        properties: { id: l.id || `lead-${idx}`, company: l.company || 'Lead', status: l.status || 'Morno' },
+        geometry: { type: 'Point', coordinates: [Number(l.lng), Number(l.lat)] }
+      }))
+    } as any;
+
+    const sourceId = 'leads-source';
+    if (map.getSource(sourceId)) {
+      (map.getSource(sourceId) as maplibregl.GeoJSONSource).setData(geojson);
+    } else {
+      map.addSource(sourceId, { type: 'geojson', data: geojson, cluster: true, clusterRadius: 50 });
+
+      map.addLayer({
+        id: 'lead-clusters',
+        type: 'circle',
+        source: sourceId,
+        filter: ['has', 'point_count'],
+        paint: {
+          'circle-color': '#7c3aed',
+          'circle-radius': ['step', ['get', 'point_count'], 16, 20, 22, 50, 28],
+          'circle-opacity': 0.9,
+          'circle-stroke-width': 2,
+          'circle-stroke-color': '#fff'
+        }
       });
 
-      addTileLayer(mapInstanceRef.current, mapType);
-  }, [mapType]);
+      map.addLayer({
+        id: 'lead-cluster-count',
+        type: 'symbol',
+        source: sourceId,
+        filter: ['has', 'point_count'],
+        layout: {
+          'text-field': ['get', 'point_count_abbreviated'],
+          'text-size': 12
+        },
+        paint: {
+          'text-color': '#fff'
+        }
+      });
 
-  // Click outside to close dropdowns
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        setIsDropdownOpen(false);
-      }
-      if (countryRef.current && !countryRef.current.contains(event.target as Node)) {
-          setIsCountryOpen(false);
-      }
-      if (regionRef.current && !regionRef.current.contains(event.target as Node)) {
-          setIsRegionOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-    };
+      map.addLayer({
+        id: 'lead-points',
+        type: 'circle',
+        source: sourceId,
+        filter: ['!', ['has', 'point_count']],
+        paint: {
+          'circle-radius': 8,
+          'circle-color': [
+            'match',
+            ['get', 'status'],
+            'Quente',
+            '#f97316',
+            'Frio',
+            '#3b82f6',
+            '#eab308'
+          ],
+          'circle-stroke-width': 2,
+          'circle-stroke-color': '#ffffff',
+          'circle-opacity': 0.95
+        }
+      });
+
+      map.on('click', 'lead-points', (e) => {
+        const feature = e.features?.[0];
+        if (!feature) return;
+        const id = feature.properties?.id;
+        const lead = allLeads.find((l) => (l.id || `lead-${allLeads.indexOf(l)}`) === id);
+        if (!lead) return;
+        setSelected({
+          company: lead.company || 'Lead',
+          city: lead.city,
+          state: '',
+          status: (lead.status as LeadStatus) || 'Morno',
+          value: lead.value ? lead.value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 0 }) : '—'
+        });
+        if (lead.lat && lead.lng) {
+          map.flyTo({ center: [Number(lead.lng), Number(lead.lat)], zoom: 10, speed: 0.7 });
+        }
+      });
+    }
+  }, [allLeads]);
+>>>>>>> theirs
+
+  const handleAddSelected = () => {
+    const match = allLeads.find((l) => (l.company || '').toLowerCase() === (selected.company || '').toLowerCase());
+    if (match && addLead) {
+      addLead(match);
+      notify?.('Lead adicionado ao CRM', 'success');
+    }
+  };
+=======
   }, []);
+>>>>>>> theirs
 
-  // Update Markers when leads or AI results change
-  useEffect(() => {
-    if (!mapInstanceRef.current) return;
-    const L = (window as any).L;
-    const map = mapInstanceRef.current;
+  const handleToggleDropdown = (id: DropdownId) => {
+    setOpenDropdown((prev) => (prev === id ? null : id));
+  };
 
-    // Clear existing markers
-    markersRef.current.forEach(marker => map.removeLayer(marker));
-    markersRef.current = [];
-    if (heatLayerRef.current) {
-        map.removeLayer(heatLayerRef.current);
-        heatLayerRef.current = null;
+  const handleSelectDropdown = (id: DropdownId, value: string) => {
+    setOpenDropdown(null);
+
+    if (id === 'minValue') {
+      const n = Number(value);
+      setFilters((prev) => ({ ...prev, minValue: Number.isFinite(n) ? n : prev.minValue }));
+      return;
     }
 
-    const bounds = L.latLngBounds();
-    const proximityMsgs: string[] = [];
-    const heatPoints: [number, number, number][] = [];
+    if (id === 'sector') {
+      const v = String(value || '').trim();
+      setFilters((prev) => ({ ...prev, sector: v ? v : null }));
+      return;
+    }
 
-    const distanceKm = (lat1: number, lon1: number, lat2: number, lon2: number) => {
-        const toRad = (v: number) => (v * Math.PI) / 180;
-        const R = 6371;
-        const dLat = toRad(lat2 - lat1);
-        const dLon = toRad(lon2 - lon1);
-        const a =
-            Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-            Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
-            Math.sin(dLon / 2) * Math.sin(dLon / 2);
-        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-        return R * c;
-    };
-
-    const leadScoreRadius = (lead: Partial<Lead>) => {
-        const base = 24;
-        const val = lead.value || 0;
-        const bonus = Math.min(18, val / 1000);
-        return isNaN(bonus) ? base : base + bonus;
-    };
-
-    filteredPoints.forEach(lead => {
-        if(!lead.lat || !lead.lng) return;
-
-        const color = getMarkerColor(lead);
-        const isGhost = !lead.id; // Not in CRM yet
-        const radius = leadScoreRadius(lead);
-        
-        // Create custom CSS icon with halo proportional ao valor
-        let iconHtml;
-        if (isGhost) {
-             iconHtml = `
-            <div style="position: relative;">
-              <div style="position:absolute; inset:-6px; background-color:${color}40; border-radius:50%; filter:blur(4px);"></div>
-              <div style="position:absolute; inset:-3px; background-color:${color}70; border-radius:50%;"></div>
-              <div style="background-color: ${color}; width: 20px; height: 20px; border-radius: 50%; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 5px rgba(0,0,0,0.3); border: 2px solid white;">
-                  <div style="width: 6px; height: 6px; background: white; border-radius: 50%;"></div>
-              </div>
-            </div>
-        `;
-        } else {
-            iconHtml = `
-            <div style="position: relative; transform: rotate(-45deg);">
-              <div style="position:absolute; inset:-10px; background-color:${color}30; border-radius:50%; filter:blur(6px);"></div>
-              <div style="background-color: ${color}; width: ${radius}px; height: ${radius}px; border-radius: 50% 50% 50% 0; display: flex; align-items: center; justify-content: center; box-shadow: 2px 2px 5px rgba(0,0,0,0.3); border: 2px solid white;">
-                  <div style="width: 8px; height: 8px; background: white; border-radius: 50%; transform: rotate(45deg);"></div>
-              </div>
-            </div>
-        `;
-        }
-        
-        const customIcon = L.divIcon({
-            className: 'custom-pin',
-            html: iconHtml,
-            iconSize: isGhost ? [26, 26] : [radius, radius + 18],
-            iconAnchor: isGhost ? [13, 13] : [radius / 2, radius],
-            popupAnchor: isGhost ? [0, -10] : [0, -35]
-        });
-
-        const hasData = (val: string | null | undefined) => {
-            return val && val !== 'null' && val !== 'undefined' && val !== '';
-        };
-
-        // HTML Content for Popup (Simplified)
-        const popupContent = `
-            <div style="font-family: 'Inter', sans-serif; min-width: 250px; max-width: 280px;">
-                <div style="padding: 4px;">
-                    <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 4px;">
-                        <h3 style="font-weight: 700; color: #1f2937; font-size: 14px; margin: 0; line-height: 1.2;">${lead.company}</h3>
-                        ${isGhost ? '<span style="background: #f3f4f6; color: #6b7280; font-size: 9px; padding: 2px 4px; border-radius: 4px; border: 1px solid #e5e7eb;">Oportunidade</span>' : ''}
-                    </div>
-                    
-                    ${lead.description ? `
-                        <p style="font-size: 11px; color: #6b7280; margin-bottom: 8px; font-style: italic; line-height: 1.3;">${lead.description}</p>
-                    ` : ''}
-
-                    <p style="font-size: 11px; color: #4b5563; margin-bottom: 6px; display: flex; gap: 4px;">
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
-                        ${hasData(lead.address) ? lead.address : 'Endereço aproximado'}
-                    </p>
-
-                    ${lead.openingHours ? `
-                        <div style="display: flex; align-items: center; gap: 4px; margin-bottom: 6px; color: #4b5563; font-size: 11px;">
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
-                            ${lead.openingHours}
-                        </div>
-                    ` : ''}
-                    
-                    ${lead.name && lead.name !== 'Gerente' && hasData(lead.name) ? `
-                        <div style="display: flex; align-items: center; gap: 4px; margin-bottom: 4px; color: #4b5563; font-size: 11px;">
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
-                            <strong>Dono/Contato:</strong> ${lead.name}
-                        </div>
-                    ` : ''}
-
-                    <div style="display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 8px; margin-top: 8px;">
-                        ${hasData(lead.phone) ? `
-                            <a href="tel:${lead.phone}" style="background: #ecfdf5; color: #059669; padding: 2px 6px; border-radius: 4px; font-size: 10px; text-decoration: none; display: flex; align-items: center; gap: 2px;">
-                                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path></svg>
-                                ${lead.phone}
-                            </a>
-                        ` : `
-                            <span style="background: #f3f4f6; color: #9ca3af; padding: 2px 6px; border-radius: 4px; font-size: 10px; display: flex; align-items: center; gap: 2px;">
-                                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-                                Telefone Indisponível
-                            </span>
-                        `}
-                        ${hasData(lead.website) ? `
-                            <a href="${lead.website}" target="_blank" style="background: #eff6ff; color: #2563eb; padding: 2px 6px; border-radius: 4px; font-size: 10px; text-decoration: none; display: flex; align-items: center; gap: 2px;">
-                                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>
-                                Site
-                            </a>
-                        ` : ''}
-                        ${hasData(lead.instagram) ? `
-                            <a href="${lead.instagram}" target="_blank" style="background: #fdf2f8; color: #db2777; padding: 2px 6px; border-radius: 4px; font-size: 10px; text-decoration: none; display: flex; align-items: center; gap: 2px;">
-                                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"></rect><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"></path><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"></line></svg>
-                                Insta
-                            </a>
-                        ` : ''}
-                    </div>
-
-                    ${!isGhost ? `
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 8px; padding-top: 8px; border-top: 1px solid #f3f4f6;">
-                        <span style="background: ${color}20; color: ${color}; font-size: 10px; padding: 2px 6px; border-radius: 4px; font-weight: 600;">${lead.status}</span>
-                        <span style="font-weight: 700; color: #059669; font-size: 12px;">USD ${(lead.value || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
-                    </div>
-                    ` : `
-                    <div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid #f3f4f6;">
-                        <button id="btn-import-${lead.company?.replace(/[^a-zA-Z0-9]/g, '')}" style="width: 100%; background: #4f46e5; color: white; border: none; padding: 6px; border-radius: 4px; font-size: 11px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 4px;">
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg> 
-                        Adicionar ao CRM
-                        </button>
-                    </div>
-                    `}
-                </div>
-            </div>
-        `;
-
-        const marker = L.marker([lead.lat, lead.lng], { icon: customIcon })
-            .addTo(map)
-            .bindPopup(popupContent);
-
-        marker.on('click', () => {
-            setSelectedLead(lead);
-            map.flyTo([lead.lat, lead.lng], 16, { duration: 1.5 });
-            
-            // Hacky way to add event listener to popup button after it opens
-            setTimeout(() => {
-                // Sanitize ID
-                const safeId = lead.company?.replace(/[^a-zA-Z0-9]/g, '');
-                const btn = document.getElementById(`btn-import-${safeId}`);
-                if (btn && addLead) {
-                    btn.onclick = (e) => {
-                        e.stopPropagation();
-                        addLead(lead);
-                        marker.closePopup();
-                    };
-                }
-            }, 100);
-        });
-
-        markersRef.current.push(marker);
-        if (Number.isFinite(lead.lat) && Number.isFinite(lead.lng)) {
-            bounds.extend([lead.lat, lead.lng]);
-            if (!Number.isNaN(lead.lat) && !Number.isNaN(lead.lng)) {
-                heatPoints.push([lead.lat, lead.lng, Math.max(0.5, (lead.value || 1000) / 20000)]);
-            }
-        }
-    });
-
-    // Proximidade: leads próximos de oportunidades
-    const ghosts = filteredPoints.filter(l => !l.id && l.lat && l.lng);
-    const real = filteredPoints.filter(l => l.id && l.lat && l.lng);
-    ghosts.forEach(g => {
-        real.forEach(r => {
-            if (g.lat && g.lng && r.lat && r.lng) {
-                const d = distanceKm(g.lat, g.lng, r.lat, r.lng);
-                if (d <= searchRadius) {
-                    proximityMsgs.push(`${g.company || 'Oportunidade'} a ${d.toFixed(1)} km de ${r.company}`);
-                }
-            }
-        });
-    });
-    setProximityAlerts(proximityMsgs.slice(0, 6));
-
-    // Heat layer com círculos suaves
-    if (!bounds.isValid()) return;
-    map.fitBounds(bounds, { padding: [60, 60] });
-
-  }, [filteredPoints, addLead, searchRadius]);
-
-  const addTileLayer = (map: any, type: 'street' | 'satellite') => {
-      const L = (window as any).L;
-      let layer;
-      if (type === 'street') {
-        layer = L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
-            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
-            subdomains: 'abcd',
-            maxZoom: 20
-        }).addTo(map);
-      } else {
-        // Using Esri World Imagery for Satellite feel
-        layer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-            attribution: 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community',
-            maxZoom: 19
-        }).addTo(map);
-      }
-      layer.on('tileerror', () => setTileError(true));
-      layer.on('load', () => setTileError(false));
-  };
-
-  const centerMap = () => {
-      if (mapInstanceRef.current && validLeads.length > 0) {
-        const L = (window as any).L;
-        const bounds = L.latLngBounds();
-        validLeads.forEach(l => bounds.extend([l.lat, l.lng]));
-        mapInstanceRef.current.fitBounds(bounds, { padding: [50, 50] });
-      }
-  };
-
-  const handleMapSearch = async (e: React.FormEvent) => {
-      e.preventDefault();
-      if (!searchQuery.trim()) return;
-
-      setIsSearching(true);
-      
-      try {
-          // 1. Geocoding via Nominatim (OpenStreetMap)
-          // Construct a more specific query using State and Country
-          const countryName = LOCATIONS[country].name;
-          const fullQuery = `${searchQuery}, ${region ? region + ',' : ''} ${countryName}`;
-          
-          const nominatimRes = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(fullQuery)}`);
-          const geoData = await nominatimRes.json();
-
-          let latitude: number | null = null;
-          let longitude: number | null = null;
-          let displayName = '';
-
-          if (geoData && geoData.length > 0) {
-              const { lat, lon, display_name } = geoData[0];
-              latitude = parseFloat(lat);
-              longitude = parseFloat(lon);
-              displayName = display_name;
-          } else if (mapInstanceRef.current) {
-              const center = mapInstanceRef.current.getCenter();
-              latitude = center?.lat || null;
-              longitude = center?.lng || null;
-              displayName = `${searchQuery || 'Área selecionada'}, ${region || ''} ${countryName}`;
-              notify?.("Local não encontrado pelo geocoding. Buscando pela região exibida no mapa.", 'info');
-          } else {
-              displayName = `${searchQuery || 'Região alvo'}, ${region || ''} ${countryName}`;
-              latitude = 0;
-              longitude = 0;
-              notify?.("Local não encontrado. Tentando busca sem coordenadas precisas.", 'info');
-          }
-
-          // 2. Ask AI to find businesses nearby this coordinate (or fallback)
-          const limit = typeof searchLimit === 'number' ? searchLimit : parseInt(searchLimit) || 5;
-          const newPlaces = await findNearbyPlacesWithPerplexity(
-              latitude || 0,
-              longitude || 0,
-              displayName,
-              searchIndustry,
-              limit,
-              searchQuery,
-              country,
-              region
-          );
-          
-          setAiPlaces(newPlaces);
-          
-          // 3. AUTO FIT BOUNDS to show all new pins
-          if (newPlaces.length > 0 && mapInstanceRef.current) {
-              const L = (window as any).L;
-              const bounds = L.latLngBounds();
-              
-              bounds.extend([latitude || 0, longitude || 0]);
-              
-              newPlaces.forEach(p => {
-                  if (p.lat && p.lng) bounds.extend([p.lat, p.lng]);
-              });
-              
-              setTimeout(() => {
-                mapInstanceRef.current.fitBounds(bounds, { padding: [80, 80], maxZoom: 17, animate: true, duration: 1.5 });
-              }, 500);
-          } else if (newPlaces.length === 0) {
-              notify?.("Nenhum resultado encontrado. Tente especificar melhor o local ou nicho.", 'warning');
-          }
-
-      } catch (error) {
-          if (error instanceof Error) {
-              notify?.(`Erro: ${error.message}`, 'warning');
-          } else {
-              console.error("Map search error", error);
-          }
-      } finally {
-          setIsSearching(false);
-      }
-  };
-
-  // Limit Input Handlers
-  const handleLimitChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-      const val = e.target.value;
-      if (val === '') {
-          setSearchLimit('');
-          return;
-      }
-      const num = parseInt(val);
-      if (!isNaN(num) && num <= 20) {
-          setSearchLimit(num);
-      }
-  };
-
-  const handleLimitBlur = () => {
-      if (searchLimit === '' || Number(searchLimit) < 1) {
-          setSearchLimit(5);
-      }
-  };
-
-  const handleRadiusSearch = async () => {
-      if (!selectedLead || !selectedLead.lat || !selectedLead.lng) {
-          notify?.("Selecione um lead no mapa para buscar ao redor.", 'warning');
-          return;
-      }
-      setIsSearching(true);
-      try {
-          const centerName = `${selectedLead.company || selectedLead.address || 'Ponto selecionado'}`;
-          const limit = typeof searchLimit === 'number' ? searchLimit : parseInt(searchLimit) || 5;
-          const results = await findNearbyPlacesWithPerplexity(
-            selectedLead.lat,
-            selectedLead.lng,
-            centerName,
-            searchIndustry,
-            limit,
-            searchQuery,
-            country,
-            region
-          );
-          setAiPlaces(results);
-
-          if (results.length > 0 && mapInstanceRef.current) {
-              const L = (window as any).L;
-              const bounds = L.latLngBounds();
-              bounds.extend([selectedLead.lat, selectedLead.lng]);
-              results.forEach(p => p.lat && p.lng && bounds.extend([p.lat, p.lng]));
-              mapInstanceRef.current.fitBounds(bounds, { padding: [80, 80], maxZoom: 16 });
-          }
-      } catch (e: any) {
-          notify?.(`Erro na busca por raio: ${e.message || e}`, 'warning');
-      } finally {
-          setIsSearching(false);
-      }
-  };
-
-  const buildRoutePlan = () => {
-      const anchor = selectedLead && selectedLead.lat && selectedLead.lng
-        ? selectedLead
-        : filteredPoints.find(p => p.lat && p.lng);
-      if (!anchor || !anchor.lat || !anchor.lng) {
-        notify?.('Nenhum ponto com coordenadas para montar roteiro.', 'warning');
-        return;
-      }
-
-      const dist = (a: Partial<Lead>) => {
-        if (!a.lat || !a.lng) return Infinity;
-        const dx = a.lat - anchor.lat;
-        const dy = a.lng - anchor.lng;
-        return Math.sqrt(dx*dx + dy*dy);
-      };
-
-      const sorted = [...filteredPoints]
-        .filter(p => p.lat && p.lng)
-        .sort((a, b) => dist(a) - dist(b))
-        .slice(0, 12);
-      setRoutePlan(sorted);
+    setFilters((prev) => ({ ...prev, [id]: value }));
   };
 
   return (
-    <div className="h-full flex flex-col space-y-4 relative overflow-hidden">
-       <div className="flex justify-between items-start">
-        <div>
-            <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
-                <MapPin className="w-6 h-6 text-indigo-600" />
-                Mapa de Oportunidades
-            </h2>
-            <p className="text-gray-500 text-sm">Visualização geoespacial dos leads e territórios.</p>
-        </div>
-        <div className="flex gap-2">
-            <button 
-                onClick={() => setMapType(mapType === 'street' ? 'satellite' : 'street')}
-                className="bg-white border border-gray-200 text-gray-600 px-3 py-1.5 rounded-lg text-sm font-medium hover:bg-gray-50 shadow-sm flex items-center gap-2 transition-all"
-            >
-                <Layers className="w-4 h-4" />
-                {mapType === 'street' ? 'Modo Satélite (3D)' : 'Modo Rua'}
-            </button>
-            <button 
-                onClick={centerMap}
-                className="bg-indigo-600 text-white px-3 py-1.5 rounded-lg text-sm font-medium hover:bg-indigo-700 shadow-sm flex items-center gap-2 transition-all"
-            >
-                <Maximize2 className="w-4 h-4" />
-                Centralizar
-            </button>
-        </div>
+    <div className="min-h-screen w-full bg-[#070714] text-white">
+      <div className="pointer-events-none fixed inset-0 overflow-hidden">
+<<<<<<< ours
+        <div className="absolute -top-40 left-1/2 h-[520px] w-[920px] -translate-x-1/2 rounded-full bg-violet-600/25 blur-3xl" />
+        <div className="absolute -bottom-48 left-10 h-[460px] w-[560px] rounded-full bg-indigo-500/20 blur-3xl" />
+        <div className="absolute top-24 -right-24 h-[520px] w-[520px] rounded-full bg-fuchsia-500/12 blur-3xl" />
+        <div className="absolute inset-0 opacity-[0.07] [background-image:radial-gradient(white_1px,transparent_1px)] [background-size:22px_22px]" />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-3 max-w-6xl mx-auto w-full">
-        <div className="col-span-2 glass-panel rounded-xl p-3 flex flex-wrap gap-2 items-center">
-          <span className="text-xs font-bold text-gray-500 uppercase">Filtros rápidos</span>
-          <div className="flex gap-1">
-            {(['all', PipelineStage.NEW, PipelineStage.CONTACT, PipelineStage.QUALIFIED, PipelineStage.CLOSED] as const).map(st => (
-              <button
-                key={st}
-                onClick={() => setStatusFilter(st)}
-                className={`px-2.5 py-1 rounded-lg text-xs font-semibold border transition-colors ${
-                  statusFilter === st
-                    ? 'bg-indigo-50 text-indigo-700 border-indigo-200'
-                    : 'bg-white text-gray-600 border-gray-200 hover:border-indigo-200'
-                }`}
-              >
-                {st === 'all' ? 'Todos' : st}
+      <div className="relative mx-auto flex max-w-6xl gap-8 px-6 py-10">
+        <aside
+          ref={panelRef}
+          className="w-[360px] shrink-0 rounded-[36px] border border-white/10 bg-[#0b0b1f]/80 p-7 shadow-[0_45px_110px_rgba(0,0,0,0.55)] backdrop-blur-xl"
+        >
+          <div className="mb-6">
+            <div className="text-xs uppercase tracking-[0.28em] text-violet-200/80 mb-2">Devtone Leads</div>
+            <div className="text-2xl font-extrabold text-white">Mapa Inteligente</div>
+          </div>
+
+          <div className="relative mb-6">
+            <Icon.Search className="pointer-events-none absolute left-6 top-1/2 h-6 w-6 -translate-y-1/2 text-white/45" />
+            <input
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full rounded-[28px] border border-white/10 bg-white/[0.06] px-14 py-5 text-lg text-white placeholder:text-white/40 focus:outline-none focus:ring-2 focus:ring-violet-500/40 focus:border-violet-400/50"
+              placeholder="Buscar empresa/cidade..."
+            />
+          </div>
+
+          <div className="space-y-4">
+            <DropdownRow
+              id="status"
+              label="Status"
+              value={filters.status || 'Todos'}
+              open={openDropdown === 'status'}
+              options={statusOptions}
+              onToggle={handleToggleDropdown}
+              onSelect={handleSelectDropdown}
+            />
+
+            <DropdownRow
+              id="minValue"
+              label="Min Valor"
+              value={formatThousands(filters.minValue)}
+              open={openDropdown === 'minValue'}
+              options={minValueOptions}
+              onToggle={handleToggleDropdown}
+              onSelect={handleSelectDropdown}
+            />
+
+            <DropdownRow
+              id="sector"
+              label="Setor"
+              value={filters.sector || 'Selecionar'}
+              open={openDropdown === 'sector'}
+              options={sectorDropdownOptions}
+              onToggle={handleToggleDropdown}
+              onSelect={handleSelectDropdown}
+            />
+
+            <DropdownRow
+              id="location"
+              label="Localização"
+              value={filters.location || 'Brasil'}
+              open={openDropdown === 'location'}
+              options={locationOptions}
+              onToggle={handleToggleDropdown}
+              onSelect={handleSelectDropdown}
+            />
+
+            <DropdownRow
+              id="state"
+              label="Estado"
+              value={filters.state || 'SP'}
+              open={openDropdown === 'state'}
+              options={ufOptions}
+              onToggle={handleToggleDropdown}
+              onSelect={handleSelectDropdown}
+            />
+          </div>
+        </aside>
+
+        <main className="flex-1">
+          <div className="mb-4 flex items-center justify-between rounded-2xl border border-white/10 bg-[#0b0b1f]/70 px-5 py-4 backdrop-blur">
+            <div className="text-sm text-white/70">
+              Leads no mapa: <span className="font-extrabold text-white">{totals.leads}</span>
+              <span className="mx-3 h-4 w-px bg-white/10 inline-block align-middle" />
+              Clusters: <span className="font-extrabold text-white">{totals.clusters}</span>
+            </div>
+            <div className="flex items-center gap-2 text-xs text-white/60">
+              <span className="inline-flex h-2 w-2 rounded-full bg-violet-400 shadow-[0_0_0_4px_rgba(168,85,247,0.18)]" />
+              Neon Purple • Glass UI
+            </div>
+          </div>
+
+          <div className="relative h-[680px] overflow-hidden rounded-[38px] border border-white/10 bg-[#0b0b1f]/40 shadow-[0_60px_160px_rgba(109,40,217,0.18)]">
+            <div className="absolute inset-0">
+              <MapEngine
+                leads={visibleLeads}
+                selectedId={selectedFeatureId}
+                onSelectLead={(lead, featureId) => {
+                  setSelected(lead);
+                  setSelectedFeatureId(featureId);
+                }}
+                onReady={(api) => {
+                  mapApiRef.current = api;
+                }}
+                showHeatmap={showHeatmap}
+                showClusters={showClusters}
+              />
+            </div>
+
+            <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_18%_16%,rgba(139,92,246,0.30),transparent_42%),radial-gradient(circle_at_82%_12%,rgba(236,72,153,0.18),transparent_46%),radial-gradient(circle_at_50%_88%,rgba(56,189,248,0.14),transparent_45%)] mix-blend-screen" />
+            <div className="pointer-events-none absolute inset-0 ring-1 ring-violet-400/25" />
+
+            <div className="absolute right-5 top-1/2 flex -translate-y-1/2 flex-col gap-3">
+              <ControlButton onClick={() => mapApiRef.current?.zoomIn()}>
+                <Icon.Plus className="h-5 w-5" />
+              </ControlButton>
+              <ControlButton onClick={() => mapApiRef.current?.zoomOut()}>
+                <Icon.Minus className="h-5 w-5" />
+              </ControlButton>
+              <ControlButton onClick={() => mapApiRef.current?.fitToData()}>
+                <Icon.Layers className="h-5 w-5" />
+              </ControlButton>
+              <ControlButton onClick={() => setShowHeatmap(true)}>
+                <Icon.Flame className="h-5 w-5" />
+              </ControlButton>
+              <ControlButton onClick={() => setShowClusters(true)}>
+                <Icon.Home className="h-5 w-5" />
+              </ControlButton>
+=======
+        <div className="absolute -top-40 left-1/2 h-[520px] w-[920px] -translate-x-1/2 rounded-full bg-violet-600/20 blur-3xl" />
+        <div className="absolute -bottom-48 left-10 h-[460px] w-[560px] rounded-full bg-indigo-500/15 blur-3xl" />
+        <div className="absolute top-24 -right-24 h-[520px] w-[520px] rounded-full bg-fuchsia-500/10 blur-3xl" />
+        <div className="absolute inset-0 opacity-[0.08] [background-image:radial-gradient(white_1px,transparent_1px)] [background-size:22px_22px]" />
+      </div>
+
+      <div className="relative mx-auto flex max-w-6xl gap-6 px-6 py-8">
+        <aside className="w-[320px] rounded-2xl border border-white/10 bg-[#0b0b1f]/95 p-5 shadow-[0_30px_60px_rgba(0,0,0,0.6)] backdrop-blur">
+          <div className="mb-4 flex items-center gap-3">
+            <div className="h-12 w-12 rounded-xl bg-gradient-to-br from-violet-500 to-indigo-500 text-white grid place-items-center shadow-lg">
+              <Icon.Layers className="h-5 w-5" />
+            </div>
+            <div>
+              <p className="text-xs uppercase tracking-[0.2em] text-violet-200">Devtone Leads</p>
+              <p className="text-lg font-bold text-white">Mapa Inteligente</p>
+            </div>
+          </div>
+
+          <div className="relative mb-4">
+            <Icon.Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/60" />
+            <input
+              className="w-full rounded-xl border border-white/10 bg-white/[0.06] px-10 py-2 text-sm text-white placeholder:text-white/60 focus:border-violet-500 focus:outline-none"
+              placeholder="Buscar empresa/cidade..."
+            />
+          </div>
+
+          <div className="space-y-2">
+            <SelectRow label="Status" value="Todos" />
+            <SelectRow label="Min Valor" value="5.000" />
+            <SelectRow label="Setor" value="Selecionar" />
+            <SelectRow label="Localização" value="Brasil" />
+            <SelectRow label="Estado" value="SP" />
+          </div>
+
+          <GlowButton onClick={() => {}}>{'Buscar Leads'}</GlowButton>
+
+          <div className="mt-4 space-y-2">
+            <StatPill icon={<Icon.Flame className="h-4 w-4" />} label="Quentes" value="340" tone="red" />
+            <StatPill icon={<Icon.Flame className="h-4 w-4 rotate-45" />} label="Mornos" value="510" tone="amber" />
+            <StatPill icon={<Icon.Flame className="h-4 w-4 rotate-90" />} label="Frios" value="400" tone="blue" />
+          </div>
+        </aside>
+
+        <main className="flex-1">
+          <div className="mb-3 flex items-center justify-between rounded-2xl border border-white/10 bg-[#0b0b1f]/80 px-4 py-3 backdrop-blur">
+            <div className="flex items-center gap-2 text-sm text-white/80">
+              <Icon.Home className="h-4 w-4 text-violet-300" />
+              Leads Totais: <span className="font-bold text-white">{totals.leads}</span>
+              <span className="mx-3 h-4 w-px bg-white/15" />
+              <Icon.Cluster className="h-4 w-4 text-violet-300" />
+              Clusters: <span className="font-bold text-white">{totals.clusters}</span>
+              <span className="mx-3 h-4 w-px bg-white/15" />
+              Modo: <span className="font-semibold text-white">{totals.mode}</span>
+>>>>>>> theirs
+            </div>
+            <div className="flex items-center gap-2 text-xs text-white/70">
+              <Icon.List className="h-4 w-4" /> Ver Lista
+            </div>
+          </div>
+
+<<<<<<< ours
+            <div className="absolute bottom-6 left-1/2 flex -translate-x-1/2 items-center gap-2 rounded-full border border-white/10 bg-[#0b0b1f]/70 px-3 py-2 backdrop-blur">
+              <TogglePill active={showHeatmap} onClick={() => setShowHeatmap((v) => !v)}>
+                <Icon.Flame className="h-4 w-4 text-amber-300" /> Heatmap
+              </TogglePill>
+              <TogglePill active={showClusters} onClick={() => setShowClusters((v) => !v)}>
+                <Icon.Layers className="h-4 w-4 text-violet-300" /> Clusters
+              </TogglePill>
+              <TogglePill active={false}>
+                <Icon.List className="h-4 w-4 text-white/70" /> Ver Lista
+              </TogglePill>
+            </div>
+
+            <div className="absolute bottom-6 right-6 w-[320px] rounded-[26px] border border-white/10 bg-[#0b0b1f]/75 p-5 shadow-[0_35px_100px_rgba(0,0,0,0.55)] backdrop-blur-xl">
+              <div className="mb-2 flex items-center gap-2 text-violet-200/90 text-xs uppercase tracking-[0.22em]">
+                <Icon.Layers className="h-4 w-4" /> Lead Selecionado
+              </div>
+              <p className="text-xl font-extrabold text-white leading-tight">{selectedDisplay?.company || '—'}</p>
+              <p className="mt-1 text-white/60">
+                {selectedDisplay?.city || '—'}
+                {selectedDisplay?.uf ? `, ${selectedDisplay.uf}` : ''}
+              </p>
+              <div className="mt-4 flex items-center justify-between">
+                <span className="text-white/60">Status</span>
+                <span className="rounded-full bg-violet-500/20 px-2.5 py-1 text-xs font-extrabold text-violet-100 border border-violet-400/25">
+                  {selectedDisplay?.status || '—'}
+                </span>
+=======
+          <div className="relative h-[560px] overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-br from-[#0b0b1f] via-[#0f0f2a] to-[#0b0b1f] shadow-[0_30px_80px_rgba(0,0,0,0.55)]">
+            <div ref={mapContainerRef} className="absolute inset-0" />
+            <div className="absolute bottom-3 left-1/2 flex -translate-x-1/2 items-center gap-3 rounded-full border border-white/10 bg-white/[0.08] px-4 py-2 text-sm backdrop-blur">
+              <button className="flex items-center gap-2 rounded-full bg-white/[0.14] px-3 py-1.5 text-white">
+                <Icon.Flame className="h-4 w-4 text-amber-300" /> Heatmap
               </button>
-            ))}
-          </div>
-          <div className="flex items-center gap-2 ml-auto">
-            <label className="text-[11px] text-gray-500 uppercase font-semibold">Valor mín.</label>
-            <input
-              type="number"
-              value={minValue}
-              onChange={(e) => setMinValue(Number(e.target.value) || 0)}
-              className="w-24 px-2 py-1.5 text-sm border border-gray-200 rounded-lg focus:ring-1 focus:ring-indigo-500"
-            />
-            <input
-              type="text"
-              value={tagFilter}
-              onChange={(e) => setTagFilter(e.target.value)}
-              placeholder="Tag/Setor"
-              className="w-32 px-2 py-1.5 text-sm border border-gray-200 rounded-lg focus:ring-1 focus:ring-indigo-500"
-            />
-          </div>
-        </div>
-        {/* Heatmap controls removidos */}
-        <div className="glass-panel rounded-xl p-3 text-xs text-gray-700">
-          <p className="font-bold text-gray-800 mb-1">Alertas de proximidade</p>
-          {proximityAlerts.length === 0 && <p className="text-gray-400">Nenhum alerta ativo.</p>}
-          {proximityAlerts.map((msg, idx) => (
-            <p key={idx} className="flex items-start gap-1 text-[11px] text-gray-600">
-              <span className="text-emerald-500 mt-0.5">•</span>{msg}
-            </p>
-          ))}
-        </div>
-      </div>
+              <button className="flex items-center gap-2 rounded-full px-3 py-1.5 text-white/80 hover:bg-white/[0.1]">
+                <Icon.Cluster className="h-4 w-4 text-violet-300" /> Clusters
+              </button>
+              <button className="flex items-center gap-2 rounded-full px-3 py-1.5 text-white/80 hover:bg-white/[0.1]">
+                <Icon.List className="h-4 w-4 text-white/70" /> Ver Lista
+              </button>
+            </div>
+            <div className="absolute right-4 top-4 flex flex-col gap-2">
+              <GlowButton variant="ghost">
+                <Icon.Plus className="h-4 w-4" />
+              </GlowButton>
+              <GlowButton variant="ghost">
+                <Icon.Minus className="h-4 w-4" />
+              </GlowButton>
+              <GlowButton variant="ghost">
+                <Icon.Layers className="h-4 w-4" />
+              </GlowButton>
+            </div>
 
-          <div className="flex-1 flex gap-4 h-full min-h-0 relative flex-col">
-          
-          {/* Smart Search Bar - Below filters */}
-          <div className="w-full max-w-6xl mx-auto flex flex-col gap-2 px-2 sm:px-4 z-[50] mt-4">
-              <form onSubmit={handleMapSearch} className="flex flex-wrap md:flex-nowrap gap-2 p-2 bg-white/95 dark:bg-slate-900/90 backdrop-blur rounded-xl shadow-lg border border-gray-200 dark:border-slate-800 items-center">
-                  
-                   {/* Country Selector */}
-                   <div className="relative w-24 shrink-0" ref={countryRef}>
-                        <button
-                            type="button"
-                            onClick={() => setIsCountryOpen(!isCountryOpen)}
-                        className="w-full px-2 py-2.5 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm text-gray-900 dark:text-slate-100 focus:ring-2 focus:ring-indigo-500 outline-none flex items-center justify-between"
-                        >
-                             <div className="flex items-center gap-1.5">
-                                <img src={LOCATIONS[country].flag} alt={country} className="w-4 h-auto rounded-sm" />
-                                <span className="text-xs font-bold">{country}</span>
-                            </div>
-                            <ChevronDown className="w-3 h-3 text-gray-400" />
-                        </button>
-                        {isCountryOpen && (
-                            <div className="absolute top-full left-0 w-full mt-1 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg shadow-xl z-50 overflow-hidden">
-                                {Object.entries(LOCATIONS).map(([code, data]) => (
-                                    <div
-                                        key={code}
-                                        onClick={() => { setCountry(code as 'BR' | 'US'); setIsCountryOpen(false); setRegion(''); }}
-                                        className="flex items-center gap-2 px-3 py-2 hover:bg-gray-50 cursor-pointer"
-                                    >
-                                        <img src={data.flag} alt={code} className="w-4 h-auto rounded-sm" />
-                                        <span className="text-xs font-bold">{code}</span>
-                                    </div>
-                                ))}
-                            </div>
-                        )}
-                   </div>
-
-                   {/* State Selector */}
-                   <div className="relative w-28 shrink-0" ref={regionRef}>
-                        <button
-                            type="button"
-                            onClick={() => setIsRegionOpen(!isRegionOpen)}
-                            className="w-full px-3 py-2.5 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm text-gray-700 dark:text-slate-100 flex justify-between items-center hover:bg-gray-50 dark:hover:bg-slate-800 focus:ring-2 focus:ring-indigo-500 outline-none"
-                        >
-                            <span className="truncate text-xs">{region || "Estado"}</span>
-                            <ChevronDown className="w-3 h-3 text-gray-400" />
-                        </button>
-                         {isRegionOpen && (
-                            <div className="absolute top-full left-0 w-full mt-1 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg shadow-xl z-50 max-h-48 overflow-y-auto custom-scrollbar">
-                                <div onClick={() => { setRegion(''); setIsRegionOpen(false); }} className="px-3 py-2 text-xs hover:bg-indigo-50 dark:hover:bg-slate-800 cursor-pointer text-gray-500 dark:text-slate-300 italic">Todos</div>
-                                {LOCATIONS[country].states.map(s => (
-                                    <div key={s} onClick={() => { setRegion(s); setIsRegionOpen(false); }} className={`px-3 py-2 text-xs hover:bg-indigo-50 dark:hover:bg-slate-800 cursor-pointer ${region === s ? 'text-indigo-600 font-bold dark:text-indigo-300' : 'text-gray-700 dark:text-slate-200'}`}>
-                                        {s}
-                                    </div>
-                                ))}
-                            </div>
-                        )}
-                   </div>
-
-                  <div className="relative flex-1 min-w-[200px]">
-                    <input 
-                        type="text" 
-                        placeholder="Buscar local (ex: Av. Paulista, Restaurantes...)" 
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        className="w-full pl-9 pr-4 py-2.5 rounded-lg border border-gray-200 dark:border-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none text-sm bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100"
-                    />
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                  </div>
-                  
-                  {/* Custom Industry Dropdown */}
-                  <div className="relative w-60 shrink-0" ref={dropdownRef}>
-                      <button
-                          type="button"
-                          onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-                          className="w-full px-3 py-2.5 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm text-gray-700 dark:text-slate-100 flex justify-between items-center hover:bg-gray-50 dark:hover:bg-indigo-900/30 focus:ring-2 focus:ring-indigo-500 outline-none transition-colors"
-                      >
-                          <span className="truncate text-xs">{searchIndustry || "Nicho (ex: Clínicas de Estética, Restaurantes Japoneses)"}</span>
-                          <ChevronDown className={`w-3 h-3 text-gray-400 transition-transform ${isDropdownOpen ? 'rotate-180' : ''}`} />
-                      </button>
-                      
-                      {isDropdownOpen && (
-                          <div className="absolute top-full left-0 mt-1 w-full bg-white/95 dark:bg-slate-900/95 border border-gray-200 dark:border-slate-700 rounded-lg shadow-xl z-50 animate-in fade-in zoom-in-95 duration-100 max-h-60 overflow-y-auto custom-scrollbar">
-                              <button
-                                  type="button"
-                                  onClick={() => { setSearchIndustry(''); setIsDropdownOpen(false); }}
-                                  className={`w-full text-left px-3 py-2 text-xs flex items-center justify-between transition-colors ${
-                                    searchIndustry === '' 
-                                    ? 'text-indigo-600 font-medium bg-indigo-50 dark:bg-indigo-900/40 dark:text-indigo-100' 
-                                    : 'text-gray-700 dark:text-slate-100 hover:bg-indigo-50 hover:text-indigo-700 dark:hover:bg-indigo-900/30 dark:hover:text-white'
-                                  }`}
-                              >
-                                  Nicho (ex: Clínicas de Estética, Restaurantes Japoneses)
-                                  {searchIndustry === '' && <Check className="w-3 h-3" />}
-                              </button>
-                              {INDUSTRIES.map(ind => (
-                                  <button
-                                      key={ind}
-                                      type="button"
-                                      onClick={() => { setSearchIndustry(ind); setIsDropdownOpen(false); }}
-                                      className={`w-full text-left px-3 py-2 text-xs flex items-center justify-between transition-colors ${
-                                        searchIndustry === ind 
-                                        ? 'text-indigo-600 font-medium bg-indigo-50 dark:bg-indigo-900/40 dark:text-indigo-100' 
-                                        : 'text-gray-700 dark:text-slate-100 hover:bg-indigo-50 hover:text-indigo-700 dark:hover:bg-indigo-900/30 dark:hover:text-white'
-                                      }`}
-                                  >
-                                      {ind}
-                                      {searchIndustry === ind && <Check className="w-3 h-3" />}
-                                  </button>
-                              ))}
-                          </div>
-                      )}
-                  </div>
-
-                  {/* Limit Input */}
-                   <div className="relative w-20 shrink-0 hidden sm:block">
-                      <input 
-                          type="number" 
-                          value={searchLimit}
-                          onChange={handleLimitChange}
-                          onBlur={handleLimitBlur}
-                          className="w-full pl-8 pr-2 py-2.5 rounded-lg border border-gray-200 focus:ring-2 focus:ring-indigo-500 outline-none text-sm bg-white appearance-none"
-                          title="Máximo de leads (Max 20)"
-                          placeholder="Qtd"
-                      />
-                       <ListOrdered className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
-                  </div>
-
-                  <button 
-                        type="submit" 
-                        disabled={isSearching}
-                        className="glass-purple px-4 py-2.5 text-white rounded-lg transition-all disabled:opacity-50 font-medium text-sm flex items-center gap-2 shrink-0"
-                    >
-                        {isSearching ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Buscar'}
-                    </button>
-              </form>
-
-              {aiPlaces.length > 0 && (
-                  <div className="bg-white/90 backdrop-blur rounded-lg p-2 shadow-lg border border-gray-100 text-xs text-center animate-in fade-in slide-in-from-top-2 mx-auto flex items-center gap-2">
-                       <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-                      <p className="text-gray-600">Encontrei <span className="font-bold text-indigo-600">{aiPlaces.length}</span> locais próximos!</p>
-                  </div>
-              )}
-          </div>
-
-          {/* Map Container */}
-          <div className="flex-1 bg-white dark:bg-slate-900 rounded-xl shadow-lg border border-gray-200 dark:border-slate-800 overflow-hidden relative z-0 h-[70vh] min-h-[480px]">
-             <div ref={mapContainerRef} className="w-full h-full" style={{ zIndex: 1, background: 'radial-gradient(circle at 20% 20%, rgba(59,130,246,0.08), transparent 35%), radial-gradient(circle at 80% 80%, rgba(99,102,241,0.08), transparent 40%), #0f172a' }} />
-             {tileError && (
-               <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                  <div className="glass-panel px-4 py-2 rounded-xl text-sm text-gray-700 dark:text-slate-100 shadow-lg">
-                    Mapa indisponível no momento (tiles bloqueados/offline).
-                  </div>
-               </div>
-             )}
-             
-             {/* Legend Overlay */}
-             <div className="absolute bottom-6 right-6 bg-white/90 backdrop-blur-md p-4 rounded-xl shadow-lg border border-gray-100 z-[400] text-xs">
-                <h4 className="font-bold text-gray-700 mb-2">Legenda</h4>
-                <div className="space-y-2">
-                    <div className="flex items-center gap-2">
-                        <span className="w-3 h-3 rounded-full bg-blue-500 block shadow-sm border border-white"></span>
-                        <span className="text-gray-600">Novo Lead</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                        <span className="w-3 h-3 rounded-full bg-amber-500 block shadow-sm border border-white"></span>
-                        <span className="text-gray-600">Em Negociação</span>
-                    </div>
-                     <div className="flex items-center gap-2">
-                        <span className="w-3 h-3 rounded-full bg-emerald-500 block shadow-sm border border-white"></span>
-                        <span className="text-gray-600">Fechado</span>
-                    </div>
-                     <div className="flex items-center gap-2">
-                        <span className="w-2.5 h-2.5 rounded-full bg-gray-400 block shadow-sm border border-white"></span>
-                        <span className="text-gray-500 italic">Oportunidade (Busca)</span>
-                    </div>
-                </div>
-             </div>
-
-             {routePlan.length > 0 && (
-                <div className="absolute bottom-6 left-6 bg-white/95 backdrop-blur-md p-4 rounded-xl shadow-lg border border-gray-100 z-[400] w-64">
-                    <h4 className="text-sm font-bold text-gray-800 mb-2">Roteiro sugerido</h4>
-                    <div className="space-y-2 max-h-48 overflow-y-auto custom-scrollbar">
-                        {routePlan.map((p, idx) => (
-                            <div key={idx} className="flex items-start gap-2 text-xs text-gray-700">
-                                <span className="w-5 h-5 rounded-full bg-indigo-600 text-white flex items-center justify-center text-[11px]">{idx+1}</span>
-                                <div>
-                                    <p className="font-semibold leading-tight">{p.company}</p>
-                                    <p className="text-[11px] text-gray-500">{p.city}</p>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-             )}
-          </div>
-
-          {/* Sidebar List Overlay (Desktop) */}
-          <div className="w-80 bg-white rounded-xl shadow-sm border border-gray-200 flex flex-col overflow-hidden hidden lg:flex">
-              <div className="p-4 border-b border-gray-100 bg-gray-50">
-                  <h3 className="font-bold text-gray-700">Leads no Mapa ({filteredRealLeads.length})</h3>
+            <div className="absolute bottom-4 right-4 w-64 rounded-2xl border border-white/10 bg-[#0b0b1f]/90 p-4 text-sm backdrop-blur">
+              <div className="mb-2 flex items-center gap-2 text-violet-200 text-xs uppercase tracking-wide">
+                <Icon.Layers className="h-4 w-4" /> Lead Selecionado
+>>>>>>> theirs
               </div>
-              <div className="flex-1 overflow-y-auto p-2 space-y-2 custom-scrollbar">
-                  {filteredRealLeads.map(lead => (
-                      <div 
-                        key={lead.id}
-                        onClick={() => {
-                            setSelectedLead(lead);
-                            if (mapInstanceRef.current) {
-                                mapInstanceRef.current.flyTo([lead.lat, lead.lng], 17, { duration: 1.5 });
-                            }
-                        }}
-                        className={`p-3 rounded-lg border cursor-pointer transition-all hover:shadow-md ${
-                            selectedLead?.id === lead.id 
-                            ? 'bg-indigo-50 border-indigo-200 ring-1 ring-indigo-300' 
-                            : 'bg-white border-gray-100 hover:border-indigo-200'
-                        }`}
-                      >
-                          <div className="flex justify-between items-start mb-1">
-                              <h4 className="font-bold text-sm text-gray-800 truncate pr-2">{lead.company}</h4>
-                              <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 shrink-0">
-                                  {lead.status.split(' ')[0]}
-                              </span>
-                          </div>
-                          <div className="flex items-center gap-1 text-xs text-gray-500 mb-2">
-                              <MapPin className="w-3 h-3" /> {lead.city}
-                          </div>
-                          <div className="flex justify-between items-center pt-2 border-t border-gray-50">
-                              <span className="text-xs font-bold text-emerald-600">R$ {lead.value?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
-                              {lead.contactRole && (
-                                  <span className="text-[10px] text-indigo-600 flex items-center gap-1">
-                                      <User className="w-3 h-3" /> {lead.contactRole}
-                                  </span>
-                              )}
-                          </div>
-                      </div>
-                  ))}
-                  {filteredRealLeads.length === 0 && (
-                      <div className="p-4 text-center text-gray-400 text-xs">
-                          Nenhum lead com localização válida.
-                      </div>
-                  )}
+              <p className="text-lg font-bold text-white leading-tight">{selected.company}</p>
+              <p className="text-white/70">
+                {selected.city}, {selected.state}
+              </p>
+              <div className="mt-2 flex items-center justify-between">
+<<<<<<< ours
+                <span className="text-white/60">Valor</span>
+                <span className="font-extrabold text-emerald-300">{selectedDisplay?.value || '—'}</span>
               </div>
+              {canAddSelected ? (
+                <button type="button" onClick={handleAddSelected} className="glass-purple w-full mt-5 px-5 py-3 rounded-2xl font-bold">
+                  Adicionar ao CRM
+                </button>
+              ) : null}
+            </div>
+
+            <div className="pointer-events-none absolute bottom-2 left-4 text-xs text-white/45">
+              * Mapa integrado com OpenStreetMap e cluster de leads. Clique nos marcadores para ver detalhes.
+            </div>
+=======
+                <span className="text-white/70">Status</span>
+                <span className="rounded-full bg-amber-500/20 px-2 py-1 text-xs font-semibold text-amber-200">{selected.status}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-white/70">Valor</span>
+                <span className="font-extrabold text-emerald-300">{selected.value}</span>
+              </div>
+              <GlowButton onClick={() => setSelected({ ...selected })} className="mt-3">
+                Adicionar ao CRM
+              </GlowButton>
+            </div>
+>>>>>>> theirs
           </div>
+        </main>
       </div>
     </div>
   );
-};
-
-export default LeadMap;
+}
