@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   AlertTriangle,
   CalendarDays,
@@ -56,6 +57,92 @@ type ChannelOption = { id: CalendarChannel; label: string; logo?: string; accent
 type DropdownOption<T extends string> = { id: T; label: string; hint?: string; icon?: React.ElementType };
 
 const pad2 = (n: number) => String(n).padStart(2, '0');
+
+const formatTime12h = (hhmm: string) => {
+  const [hhRaw, mmRaw] = String(hhmm || '').split(':');
+  const hh = Number(hhRaw);
+  const mm = Number(mmRaw);
+  if (!Number.isFinite(hh) || !Number.isFinite(mm)) return hhmm;
+  const hour12 = (hh % 12) || 12;
+  const ampm = hh >= 12 ? 'PM' : 'AM';
+  return `${hour12}:${pad2(mm)} ${ampm}`;
+};
+
+const buildTimeOptions = (stepMinutes = 30): DropdownOption<string>[] => {
+  const step = Math.max(5, Math.min(60, Math.floor(stepMinutes)));
+  const options: DropdownOption<string>[] = [];
+  for (let minutes = 0; minutes < 24 * 60; minutes += step) {
+    const hh = Math.floor(minutes / 60);
+    const mm = minutes % 60;
+    const id = `${pad2(hh)}:${pad2(mm)}`;
+    options.push({ id, label: formatTime12h(id) });
+  }
+  return options;
+};
+
+type ConfirmDialogState = {
+  open: boolean;
+  title: string;
+  message?: string;
+  confirmText?: string;
+  cancelText?: string;
+  tone?: 'danger' | 'default';
+};
+
+const ConfirmDialog: React.FC<{
+  state: ConfirmDialogState;
+  onCancel: () => void;
+  onConfirm: () => void;
+}> = ({ state, onCancel, onConfirm }) => {
+  if (!state.open) return null;
+  return createPortal(
+    <div className="fixed inset-0 z-[10000] grid place-items-center p-4">
+      <div className="absolute inset-0 bg-black/55" onClick={onCancel} aria-hidden="true" />
+      <div
+        role="dialog"
+        aria-modal="true"
+        className="relative w-full max-w-md glass-panel bg-white/90 dark:bg-slate-950/70 border border-white/20 rounded-2xl p-5 shadow-2xl"
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="text-base font-semibold text-gray-900 dark:text-slate-50">{state.title}</p>
+            {state.message ? <p className="mt-1 text-sm text-gray-600 dark:text-slate-300">{state.message}</p> : null}
+          </div>
+          <button
+            type="button"
+            onClick={onCancel}
+            className="w-9 h-9 rounded-lg border border-white/20 bg-white/60 dark:bg-white/10 grid place-items-center hover:bg-white/70 dark:hover:bg-white/15"
+            aria-label="Fechar"
+          >
+            <X className="w-4 h-4 text-gray-700 dark:text-slate-200" />
+          </button>
+        </div>
+
+        <div className="mt-4 flex items-center justify-end gap-2">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="px-4 py-2 rounded-lg text-sm font-semibold border border-white/25 bg-white/70 dark:bg-white/10 text-gray-800 dark:text-slate-100 hover:bg-white/80 dark:hover:bg-white/15 min-h-[40px]"
+          >
+            {state.cancelText || 'Cancelar'}
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            className={`px-4 py-2 rounded-lg text-sm font-semibold min-h-[40px] ${
+              state.tone === 'danger'
+                ? 'bg-rose-500/15 text-rose-200 border border-rose-500/30 hover:bg-rose-500/20'
+                : 'glass-purple text-white border border-white/10'
+            }`}
+          >
+            {state.confirmText || 'Confirmar'}
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+};
 
 const uuidv4 = () => {
   if (typeof crypto !== 'undefined' && typeof (crypto as any).randomUUID === 'function') {
@@ -152,34 +239,75 @@ const Dropdown = <T extends string,>({
   onChange,
   disabled,
   options,
-  renderLeft
+  renderLeft,
+  placement = 'auto'
 }: {
   value: T;
   onChange: (value: T) => void;
   disabled?: boolean;
   options: DropdownOption<T>[];
   renderLeft?: (active: DropdownOption<T> | undefined) => React.ReactNode;
+  placement?: 'auto' | 'top' | 'bottom';
 }) => {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement | null>(null);
+  const buttonRef = useRef<HTMLButtonElement | null>(null);
+  const menuRef = useRef<HTMLDivElement | null>(null);
+  const [menuStyle, setMenuStyle] = useState<React.CSSProperties | null>(null);
   const active = options.find((o) => o.id === value);
 
   useEffect(() => {
     const onDoc = (e: MouseEvent) => {
       const target = e.target as Node;
-      if (ref.current && !ref.current.contains(target)) setOpen(false);
+      const insideTrigger = !!(ref.current && ref.current.contains(target));
+      const insideMenu = !!(menuRef.current && menuRef.current.contains(target));
+      if (!insideTrigger && !insideMenu) setOpen(false);
     };
     document.addEventListener('mousedown', onDoc);
     return () => document.removeEventListener('mousedown', onDoc);
   }, []);
 
+  useEffect(() => {
+    if (!open) return;
+    const update = () => {
+      const el = buttonRef.current;
+      if (!el) return;
+      const rect = el.getBoundingClientRect();
+      const gap = 8;
+      const pad = 12;
+      const maxH = 288;
+      const spaceBelow = window.innerHeight - rect.bottom - gap - pad;
+      const spaceAbove = rect.top - gap - pad;
+      const placeBelow =
+        placement === 'bottom' ? true : placement === 'top' ? false : spaceBelow >= 160 || spaceBelow >= spaceAbove;
+      const maxHeight = Math.max(140, Math.min(maxH, placeBelow ? spaceBelow : spaceAbove));
+      const width = rect.width;
+      const left = Math.min(Math.max(rect.left, pad), window.innerWidth - pad - width);
+      if (placeBelow) {
+        const top = rect.bottom + gap;
+        setMenuStyle({ position: 'fixed', top, left, width, maxHeight, zIndex: 9999 });
+      } else {
+        const bottom = window.innerHeight - rect.top + gap;
+        setMenuStyle({ position: 'fixed', bottom, left, width, maxHeight, zIndex: 9999 });
+      }
+    };
+    update();
+    window.addEventListener('resize', update);
+    window.addEventListener('scroll', update, true);
+    return () => {
+      window.removeEventListener('resize', update);
+      window.removeEventListener('scroll', update, true);
+    };
+  }, [open, placement]);
+
   return (
-    <div ref={ref} className="relative">
+    <div ref={ref} className={`relative ${open ? 'z-50' : 'z-0'}`}>
       <button
         type="button"
+        ref={buttonRef}
         disabled={disabled}
         onClick={() => setOpen((p) => !p)}
-        className={`w-full flex items-center justify-between gap-3 rounded-lg border border-white/20 bg-white/60 dark:bg-white/10 px-3 py-2 text-[13px] leading-5 text-gray-800 dark:text-slate-100 transition ${
+        className={`w-full flex items-center justify-between gap-3 rounded-lg border border-white/20 bg-white/60 dark:bg-white/10 px-3 py-2.5 min-h-[44px] text-[13px] leading-5 text-gray-800 dark:text-slate-100 transition ${
           disabled ? 'opacity-60 cursor-not-allowed' : 'hover:bg-white/55 dark:hover:bg-white/15'
         }`}
         aria-haspopup="listbox"
@@ -192,41 +320,52 @@ const Dropdown = <T extends string,>({
         <ChevronDown className={`w-4 h-4 text-gray-600 dark:text-slate-300 transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
 
-      {open ? (
-        <div
-          role="listbox"
-          className="absolute z-30 mt-2 w-full rounded-xl border border-white/20 bg-white/95 dark:bg-slate-900/95 shadow-2xl overflow-hidden max-h-72 overflow-auto"
-        >
-          {options.map((opt) => {
-            const isActive = opt.id === value;
-            const Icon = opt.icon;
-            return (
-              <button
-                type="button"
-                key={opt.id}
-                onClick={() => {
-                  onChange(opt.id);
-                  setOpen(false);
-                }}
-                className={`w-full text-left px-3 py-1.5 flex items-center gap-3 transition ${
-                  isActive ? 'bg-purple-500/10 dark:bg-purple-500/15' : 'hover:bg-purple-500/10 dark:hover:bg-purple-500/10'
-                }`}
-              >
-                {Icon ? (
-                  <span className="w-7 h-7 rounded-lg border border-white/15 bg-white/70 dark:bg-white/10 grid place-items-center shrink-0">
-                    <Icon className="w-4 h-4 text-purple-500" />
-                  </span>
-                ) : null}
-                <span className="flex-1">
-                  <span className="text-[12px] leading-5 font-semibold text-gray-900 dark:text-slate-50">{opt.label}</span>
-                  {opt.hint ? <span className="block text-[10px] text-gray-500 dark:text-slate-300">{opt.hint}</span> : null}
-                </span>
-                {isActive ? <CheckCircle2 className="w-5 h-5 text-emerald-500" /> : null}
-              </button>
-            );
-          })}
-        </div>
-      ) : null}
+      {open && menuStyle
+        ? createPortal(
+            <div
+              ref={menuRef}
+              role="listbox"
+              style={menuStyle}
+              className="rounded-xl border border-white/20 bg-white/95 dark:bg-slate-900/95 shadow-2xl overflow-hidden overflow-auto"
+            >
+              {options.map((opt) => {
+                const isActive = opt.id === value;
+                const Icon = opt.icon;
+                return (
+                  <button
+                    type="button"
+                    key={opt.id}
+                    onClick={() => {
+                      onChange(opt.id);
+                      setOpen(false);
+                    }}
+                    className={`w-full text-left px-3 py-1.5 flex items-center gap-3 transition ${
+                      isActive
+                        ? 'bg-purple-500/10 dark:bg-purple-500/15'
+                        : 'hover:bg-purple-500/10 dark:hover:bg-purple-500/10'
+                    }`}
+                  >
+                    {Icon ? (
+                      <span className="w-7 h-7 rounded-lg border border-white/15 bg-white/70 dark:bg-white/10 grid place-items-center shrink-0">
+                        <Icon className="w-4 h-4 text-purple-500" />
+                      </span>
+                    ) : null}
+                    <span className="flex-1">
+                      <span className="text-[12px] leading-5 font-semibold text-gray-900 dark:text-slate-50">
+                        {opt.label}
+                      </span>
+                      {opt.hint ? (
+                        <span className="block text-[10px] text-gray-500 dark:text-slate-300">{opt.hint}</span>
+                      ) : null}
+                    </span>
+                    {isActive ? <CheckCircle2 className="w-5 h-5 text-emerald-500" /> : null}
+                  </button>
+                );
+              })}
+            </div>,
+            document.body
+          )
+        : null}
     </div>
   );
 };
@@ -235,27 +374,67 @@ const ChannelDropdown: React.FC<{
   value: CalendarChannel;
   onChange: (value: CalendarChannel) => void;
   disabled?: boolean;
-}> = ({ value, onChange, disabled }) => {
+  placement?: 'auto' | 'top' | 'bottom';
+}> = ({ value, onChange, disabled, placement = 'auto' }) => {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement | null>(null);
+  const buttonRef = useRef<HTMLButtonElement | null>(null);
+  const menuRef = useRef<HTMLDivElement | null>(null);
+  const [menuStyle, setMenuStyle] = useState<React.CSSProperties | null>(null);
   const active = CHANNEL_OPTIONS.find((o) => o.id === value) || CHANNEL_OPTIONS[0];
 
   useEffect(() => {
     const onDoc = (e: MouseEvent) => {
       const target = e.target as Node;
-      if (ref.current && !ref.current.contains(target)) setOpen(false);
+      const insideTrigger = !!(ref.current && ref.current.contains(target));
+      const insideMenu = !!(menuRef.current && menuRef.current.contains(target));
+      if (!insideTrigger && !insideMenu) setOpen(false);
     };
     document.addEventListener('mousedown', onDoc);
     return () => document.removeEventListener('mousedown', onDoc);
   }, []);
 
+  useEffect(() => {
+    if (!open) return;
+    const update = () => {
+      const el = buttonRef.current;
+      if (!el) return;
+      const rect = el.getBoundingClientRect();
+      const gap = 8;
+      const pad = 12;
+      const maxH = 288;
+      const spaceBelow = window.innerHeight - rect.bottom - gap - pad;
+      const spaceAbove = rect.top - gap - pad;
+      const placeBelow =
+        placement === 'bottom' ? true : placement === 'top' ? false : spaceBelow >= 160 || spaceBelow >= spaceAbove;
+      const maxHeight = Math.max(140, Math.min(maxH, placeBelow ? spaceBelow : spaceAbove));
+      const width = rect.width;
+      const left = Math.min(Math.max(rect.left, pad), window.innerWidth - pad - width);
+      if (placeBelow) {
+        const top = rect.bottom + gap;
+        setMenuStyle({ position: 'fixed', top, left, width, maxHeight, zIndex: 9999 });
+      } else {
+        const bottom = window.innerHeight - rect.top + gap;
+        setMenuStyle({ position: 'fixed', bottom, left, width, maxHeight, zIndex: 9999 });
+      }
+    };
+    update();
+    window.addEventListener('resize', update);
+    window.addEventListener('scroll', update, true);
+    return () => {
+      window.removeEventListener('resize', update);
+      window.removeEventListener('scroll', update, true);
+    };
+  }, [open, placement]);
+
   return (
-    <div ref={ref} className="relative">
+    <div ref={ref} className={`relative ${open ? 'z-50' : 'z-0'}`}>
       <button
         type="button"
+        ref={buttonRef}
         disabled={disabled}
         onClick={() => setOpen((p) => !p)}
-        className={`w-full flex items-center justify-between gap-3 rounded-lg border border-white/20 bg-white/60 dark:bg-white/10 px-3 py-2 text-[13px] leading-5 text-gray-800 dark:text-slate-100 transition ${
+        className={`w-full flex items-center justify-between gap-3 rounded-lg border border-white/20 bg-white/60 dark:bg-white/10 px-3 py-2.5 min-h-[44px] text-[13px] leading-5 text-gray-800 dark:text-slate-100 transition ${
           disabled ? 'opacity-60 cursor-not-allowed' : 'hover:bg-white/55 dark:hover:bg-white/15'
         }`}
         aria-haspopup="listbox"
@@ -266,7 +445,7 @@ const ChannelDropdown: React.FC<{
             {active.logo ? (
               <img src={active.logo} alt={active.label} className={channelLogoClass(active.id, 'trigger')} loading="lazy" />
             ) : (
-              <MessageCircle className="w-5 h-5 text-purple-500 relative" />
+              <Phone className="w-4 h-4 text-purple-500" />
             )}
           </span>
           <span className="font-semibold truncate">{active.label}</span>
@@ -274,41 +453,50 @@ const ChannelDropdown: React.FC<{
         <ChevronDown className={`w-4 h-4 text-gray-600 dark:text-slate-300 transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
 
-      {open ? (
-        <div
-          role="listbox"
-          className="absolute z-30 mt-2 w-full rounded-xl border border-white/20 bg-white/95 dark:bg-slate-900/95 shadow-2xl overflow-hidden max-h-72 overflow-auto"
-        >
-          {CHANNEL_OPTIONS.map((opt) => {
-            const isActive = opt.id === value;
-            return (
-              <button
-                type="button"
-                key={opt.id}
-                onClick={() => {
-                  onChange(opt.id);
-                  setOpen(false);
-                }}
-                className={`w-full text-left px-3 py-1.5 flex items-center gap-3 transition ${
-                  isActive ? 'bg-purple-500/10 dark:bg-purple-500/15' : 'hover:bg-purple-500/10 dark:hover:bg-purple-500/10'
-                }`}
-              >
-                <span className="w-7 h-7 rounded-lg overflow-hidden border border-white/15 bg-white/70 dark:bg-white/10 shrink-0 grid place-items-center">
-                  {opt.logo ? (
-                    <img src={opt.logo} alt={opt.label} className={channelLogoClass(opt.id, 'menu')} loading="lazy" />
-                  ) : (
-                    <MessageCircle className="w-5 h-5 text-purple-500 relative" />
-                  )}
-                </span>
-                <span className="flex-1">
-                  <span className="text-[12px] leading-5 font-semibold text-gray-900 dark:text-slate-50">{opt.label}</span>
-                </span>
-                {isActive ? <CheckCircle2 className="w-5 h-5 text-emerald-500" /> : null}
-              </button>
-            );
-          })}
-        </div>
-      ) : null}
+      {open && menuStyle
+        ? createPortal(
+            <div
+              ref={menuRef}
+              role="listbox"
+              style={menuStyle}
+              className="rounded-xl border border-white/20 bg-white/95 dark:bg-slate-900/95 shadow-2xl overflow-hidden overflow-auto"
+            >
+              {CHANNEL_OPTIONS.map((opt) => {
+                const isActive = opt.id === value;
+                return (
+                  <button
+                    type="button"
+                    key={opt.id}
+                    onClick={() => {
+                      onChange(opt.id);
+                      setOpen(false);
+                    }}
+                    className={`w-full text-left px-3 py-1.5 flex items-center gap-3 transition ${
+                      isActive
+                        ? 'bg-purple-500/10 dark:bg-purple-500/15'
+                        : 'hover:bg-purple-500/10 dark:hover:bg-purple-500/10'
+                    }`}
+                  >
+                    <span className="w-7 h-7 rounded-lg overflow-hidden border border-white/15 bg-white/70 dark:bg-white/10 shrink-0 grid place-items-center">
+                      {opt.logo ? (
+                        <img src={opt.logo} alt={opt.label} className="w-4 h-4 object-contain" loading="lazy" />
+                      ) : (
+                        <Phone className="w-4 h-4 text-purple-500" />
+                      )}
+                    </span>
+                    <span className="flex-1">
+                      <span className="text-[12px] leading-5 font-semibold text-gray-900 dark:text-slate-50">
+                        {opt.label}
+                      </span>
+                    </span>
+                    {isActive ? <CheckCircle2 className="w-5 h-5 text-emerald-500" /> : null}
+                  </button>
+                );
+              })}
+            </div>,
+            document.body
+          )
+        : null}
     </div>
   );
 };
@@ -344,7 +532,8 @@ const defaultConfig = (): LocalConfig => {
 };
 
 const normalizeWindows = (windows: any): CalendarWindow[] => {
-  if (!Array.isArray(windows) || windows.length === 0) return [{ start: '09:00', end: '18:00' }];
+  if (!Array.isArray(windows)) return [{ start: '09:00', end: '18:00' }];
+  if (windows.length === 0) return [];
   return windows
     .map((w) => ({ start: String(w?.start || '09:00'), end: String(w?.end || '18:00') }))
     .filter((w) => /^\d\d:\d\d$/.test(w.start) && /^\d\d:\d\d$/.test(w.end));
@@ -528,6 +717,8 @@ const Calendar: React.FC<CalendarProps> = ({
   const [error, setError] = useState<string>('');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [customTimezone, setCustomTimezone] = useState(false);
+  const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState>({ open: false, title: '' });
+  const confirmActionRef = useRef<null | (() => void | Promise<void>)>(null);
 
   useEffect(() => {
     saveJSON(LS_CONFIG, config);
@@ -827,10 +1018,7 @@ const Calendar: React.FC<CalendarProps> = ({
     }));
   };
   const removeWindow = (idx: number) => {
-    setConfig((p) => {
-      const next = normalizeWindows(p.windows).filter((_, i) => i !== idx);
-      return { ...p, windows: next.length ? next : [{ start: '09:00', end: '18:00' }] };
-    });
+    setConfig((p) => ({ ...p, windows: normalizeWindows(p.windows).filter((_, i) => i !== idx) }));
   };
 
   const addBlock = () => {
@@ -846,8 +1034,21 @@ const Calendar: React.FC<CalendarProps> = ({
   };
 
   const removeBlock = (idx: number) => {
-    if (!window.confirm('Remover este bloqueio?')) return;
-    setConfig((p) => ({ ...p, blocks: normalizeBlocks(p.blocks).filter((_, i) => i !== idx) }));
+    const b = normalizeBlocks(config.blocks)[idx];
+    setConfirmDialog({
+      open: true,
+      title: 'Remover bloqueio?',
+      message: b
+        ? `Você quer remover o bloqueio de ${b.date}${'allDay' in b && b.allDay ? ' (dia todo)' : ''}?`
+        : 'Você quer remover este bloqueio?',
+      confirmText: 'Remover',
+      cancelText: 'Cancelar',
+      tone: 'danger'
+    });
+    confirmActionRef.current = () => {
+      setConfig((p) => ({ ...p, blocks: normalizeBlocks(p.blocks).filter((_, i) => i !== idx) }));
+      notify?.('Bloqueio removido.', 'success');
+    };
   };
 
   const validateAppointment = () => {
@@ -1049,20 +1250,30 @@ const Calendar: React.FC<CalendarProps> = ({
 
   const removeAppointment = async (id: string) => {
     const target = appointments.find((a) => a.id === id);
-    if (!window.confirm('Apagar este agendamento?')) return;
-    setAppointments((prev) => (prev || []).filter((a) => a.id !== id));
-    if (target?.emailJobs?.length) {
-      for (const jobId of target.emailJobs) {
-        await cancelScheduledEmailJob(jobId);
+    setConfirmDialog({
+      open: true,
+      title: 'Apagar agendamento?',
+      message: target?.leadName ? `Você quer apagar o agendamento de ${target.leadName}?` : 'Você quer apagar este agendamento?',
+      confirmText: 'Apagar',
+      cancelText: 'Cancelar',
+      tone: 'danger'
+    });
+    confirmActionRef.current = async () => {
+      setAppointments((prev) => (prev || []).filter((a) => a.id !== id));
+      if (target?.emailJobs?.length) {
+        for (const jobId of target.emailJobs) {
+          await cancelScheduledEmailJob(jobId);
+        }
       }
-    }
-    if (currentUserId) {
-      try {
-        await deleteCalendarAppointment(id);
-      } catch {
-        // ignore
+      if (currentUserId) {
+        try {
+          await deleteCalendarAppointment(id);
+        } catch {
+          // ignore
+        }
       }
-    }
+      notify?.('Agendamento apagado.', 'success');
+    };
   };
 
   const dayName = weekdayLabel[selectedDate.getDay()] || '';
@@ -1080,6 +1291,7 @@ const Calendar: React.FC<CalendarProps> = ({
   };
 
   const persistLabel = persistMode === 'supabase' ? 'Supabase' : 'Local';
+  const timeOptions = useMemo(() => buildTimeOptions(30), []);
 
   const appHeader = (
     <header className="glass-panel bg-white/80 dark:bg-white/5 border border-white/40 dark:border-white/10 rounded-2xl p-5 flex flex-col md:flex-row md:items-center md:justify-between gap-4 shadow-lg">
@@ -1122,9 +1334,26 @@ const Calendar: React.FC<CalendarProps> = ({
 
   return (
     <div className="space-y-4 animate-fade-in max-w-5xl mx-auto">
+      <ConfirmDialog
+        state={confirmDialog}
+        onCancel={() => {
+          confirmActionRef.current = null;
+          setConfirmDialog((p) => ({ ...p, open: false }));
+        }}
+        onConfirm={async () => {
+          const fn = confirmActionRef.current;
+          confirmActionRef.current = null;
+          setConfirmDialog((p) => ({ ...p, open: false }));
+          try {
+            await fn?.();
+          } catch {
+            notify?.('Não foi possível concluir a ação.', 'warning');
+          }
+        }}
+      />
       {appHeader}
       {persistMsg ? (
-        <div className="text-sm text-gray-600 dark:text-slate-300 glass-panel backdrop-blur-xl rounded-xl p-3 border border-white/10">
+        <div className="text-sm text-gray-600 dark:text-slate-300 glass-panel rounded-xl p-3 border border-white/10">
           <p>{persistMsg}</p>
         </div>
       ) : null}
@@ -1142,347 +1371,428 @@ const Calendar: React.FC<CalendarProps> = ({
           }}
         />
 
-        {tab === 'config' && (
-        <div className="glass-panel bg-white/50 dark:bg-white/5 backdrop-blur-xl rounded-2xl p-4 border border-white/10 shadow-lg space-y-4">
-          <div className="flex items-center justify-between gap-3 flex-wrap">
-            <h3 className="text-base font-semibold text-gray-900 dark:text-slate-50 flex items-center gap-2">
-              <Clock3 className="w-5 h-5 text-indigo-400" />
-              Passo 1 • Disponibilidade
-            </h3>
-            <button onClick={saveConfig} className="glass-purple px-4 py-2 rounded-lg text-sm font-semibold flex items-center gap-2">
-              <Save className="w-4 h-4" />
-              {isSavingConfig ? 'Salvando…' : 'Salvar'}
-            </button>
-          </div>
-
-	          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-	            <div className="space-y-2">
-	              <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">Fuso horário</label>
-	              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-	                <Dropdown
-	                  value={customTimezone ? ('__custom__' as any) : (config.timezone as any)}
-	                  onChange={(v: any) => {
-	                    if (v === '__custom__') {
-	                      setCustomTimezone(true);
-	                      return;
-	                    }
-	                    setCustomTimezone(false);
-	                    setConfig((p) => ({ ...p, timezone: v }));
-	                  }}
-	                  options={[
-	                    ...TIMEZONE_OPTIONS.map((t) => ({ id: t.id as any, label: t.label, icon: Globe2 })),
-	                    { id: '__custom__' as any, label: 'Outro…', icon: Globe2 }
-	                  ]}
-	                  renderLeft={() => <Globe2 className="w-4 h-4 text-purple-500" />}
-	                />
-	                <input
-	                  value={customTimezone ? config.timezone : ''}
-	                  onChange={(e) => setConfig((p) => ({ ...p, timezone: e.target.value }))}
-	                  disabled={!customTimezone}
-	                  className="w-full rounded-lg border border-white/30 dark:border-white/20 bg-white/80 dark:bg-white/15 px-3 py-2 text-sm text-gray-800 dark:text-slate-100 disabled:opacity-60"
-	                  placeholder="Ex: America/Sao_Paulo"
-	                />
+	        {tab === 'config' && (
+	          <div className="space-y-4">
+	            <div className="glass-panel bg-white/50 dark:bg-white/5 rounded-2xl p-4 border border-white/10 shadow-lg space-y-4">
+	              <div className="flex items-center justify-between gap-3 flex-wrap">
+	                <div className="space-y-1">
+	                  <h3 className="text-base font-semibold text-gray-900 dark:text-slate-50 flex items-center gap-2">
+	                    <Clock3 className="w-5 h-5 text-indigo-400" />
+	                    Passo 1 • Disponibilidade
+	                  </h3>
+	                  <p className="text-[12px] text-gray-500 dark:text-slate-300">Defina fuso, dias, janelas e exceções.</p>
+	                </div>
+	                <button
+	                  onClick={saveConfig}
+	                  className="glass-purple px-4 py-2 rounded-lg text-sm font-semibold flex items-center gap-2 min-h-[44px]"
+	                >
+	                  <Save className="w-4 h-4" />
+	                  {isSavingConfig ? 'Salvando…' : 'Salvar'}
+	                </button>
 	              </div>
-	              <p className="text-[11px] text-gray-500 dark:text-slate-300">Escolha pronto ou digite um fuso (IANA).</p>
+
+	              <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+	                <div className="space-y-2 lg:col-span-5">
+	                  <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">Fuso horário</label>
+	                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+	                    <Dropdown
+	                      value={customTimezone ? ('__custom__' as any) : (config.timezone as any)}
+	                      onChange={(v: any) => {
+	                        if (v === '__custom__') {
+	                          setCustomTimezone(true);
+	                          return;
+	                        }
+	                        setCustomTimezone(false);
+	                        setConfig((p) => ({ ...p, timezone: v }));
+	                      }}
+	                      options={[
+	                        ...TIMEZONE_OPTIONS.map((t) => ({ id: t.id as any, label: t.label, icon: Globe2 })),
+	                        { id: '__custom__' as any, label: 'Outro…', icon: Globe2 }
+	                      ]}
+	                      renderLeft={() => <Globe2 className="w-4 h-4 text-purple-500" />}
+	                    />
+	                    <input
+	                      value={customTimezone ? config.timezone : ''}
+	                      onChange={(e) => setConfig((p) => ({ ...p, timezone: e.target.value }))}
+	                      disabled={!customTimezone}
+	                      className="w-full rounded-lg border border-white/30 dark:border-white/20 bg-white/80 dark:bg-white/15 px-3 py-2.5 min-h-[44px] text-sm text-gray-800 dark:text-slate-100 disabled:opacity-60"
+	                      placeholder="Ex: America/Sao_Paulo"
+	                    />
+	                  </div>
+	                  <p className="text-[11px] text-gray-500 dark:text-slate-300">Escolha pronto ou digite um fuso (IANA).</p>
+	                </div>
+
+	                <div className="space-y-2 lg:col-span-7">
+	                  <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">Dias de atendimento</label>
+	                  <div className="flex flex-wrap gap-2">
+	                    {Object.keys(weekdayLabel)
+	                      .map((k) => Number(k))
+	                      .sort((a, b) => a - b)
+	                      .map((d) => {
+	                        const active = config.workingDays.includes(d);
+	                        return (
+	                          <button
+	                            key={d}
+	                            type="button"
+	                            onClick={() =>
+	                              setConfig((p) => ({
+	                                ...p,
+	                                workingDays: active
+	                                  ? p.workingDays.filter((x) => x !== d)
+	                                  : [...p.workingDays, d].sort((a, b) => a - b)
+	                              }))
+	                            }
+	                            className={`px-3 py-1.5 rounded-full text-xs font-semibold border ${
+	                              active
+	                                ? 'glass-purple text-white border-transparent'
+	                                : 'bg-white/70 dark:bg-white/10 border-white/30 text-gray-700 dark:text-slate-200 hover:bg-white/80 dark:hover:bg-white/15'
+	                            }`}
+	                          >
+	                            {weekdayLabel[d]}
+	                          </button>
+	                        );
+	                      })}
+	                  </div>
+	                </div>
+	              </div>
+
+	              <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+	                <div className="glass-panel bg-white/45 dark:bg-white/5 border border-white/20 rounded-2xl p-4 space-y-3">
+	                  <div className="flex items-center justify-between gap-3 flex-wrap">
+	                    <div>
+	                      <p className="text-sm font-semibold text-gray-900 dark:text-slate-50">Janelas de atendimento</p>
+	                      <p className="text-[11px] text-gray-500 dark:text-slate-300">Horários em que você atende.</p>
+	                    </div>
+	                    <button
+	                      type="button"
+	                      onClick={addWindow}
+	                      className="px-3 py-2 rounded-lg text-sm font-semibold bg-white/70 dark:bg-white/10 border border-white/30 text-gray-800 dark:text-slate-100 hover:bg-white/80 dark:hover:bg-white/15 flex items-center gap-2 min-h-[44px]"
+	                    >
+	                      <Plus className="w-4 h-4" />
+	                      Adicionar
+	                    </button>
+	                  </div>
+
+	                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+	                    <div className="space-y-2">
+	                      <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">Slot (min)</label>
+	                      <Dropdown
+	                        value={String(config.slotMinutes || 30) as any}
+	                        onChange={(v: any) => setConfig((p) => ({ ...p, slotMinutes: Number(v) || 30 }))}
+	                        options={[
+	                          { id: '10' as any, label: '10 min', icon: Clock3 },
+	                          { id: '15' as any, label: '15 min', icon: Clock3 },
+	                          { id: '20' as any, label: '20 min', icon: Clock3 },
+	                          { id: '30' as any, label: '30 min', icon: Clock3 },
+	                          { id: '45' as any, label: '45 min', icon: Clock3 },
+	                          { id: '60' as any, label: '60 min', icon: Clock3 }
+	                        ]}
+	                      />
+	                    </div>
+	                    <div className="space-y-2">
+	                      <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">Buffer (min)</label>
+	                      <Dropdown
+	                        value={String(config.bufferMinutes || 0) as any}
+	                        onChange={(v: any) => setConfig((p) => ({ ...p, bufferMinutes: Number(v) || 0 }))}
+	                        options={[
+	                          { id: '0' as any, label: '0 min', icon: Clock3 },
+	                          { id: '5' as any, label: '5 min', icon: Clock3 },
+	                          { id: '10' as any, label: '10 min', icon: Clock3 },
+	                          { id: '15' as any, label: '15 min', icon: Clock3 },
+	                          { id: '30' as any, label: '30 min', icon: Clock3 }
+	                        ]}
+	                      />
+	                    </div>
+	                  </div>
+
+	                  <div className="space-y-2">
+	                    {normalizeWindows(config.windows).length === 0 ? (
+	                      <div className="text-sm text-gray-600 dark:text-slate-300 flex items-center gap-2">
+	                        <AlertTriangle className="w-4 h-4 text-amber-400" />
+	                        Sem janelas. Clique em “Adicionar”.
+	                      </div>
+	                    ) : null}
+		                    {normalizeWindows(config.windows).map((w, idx) => (
+		                      <div
+		                        key={idx}
+		                        className="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)_44px] gap-2 items-center"
+		                      >
+		                        <Dropdown
+		                          value={w.start as any}
+		                          onChange={(v: any) => updateWindow(idx, { start: v })}
+		                          options={timeOptions as any}
+		                          renderLeft={() => <Clock3 className="w-4 h-4 text-purple-500" />}
+		                        />
+		                        <span className="text-sm text-gray-500 dark:text-slate-300 px-2 text-center">até</span>
+		                        <Dropdown
+		                          value={w.end as any}
+		                          onChange={(v: any) => updateWindow(idx, { end: v })}
+		                          options={timeOptions as any}
+		                          renderLeft={() => <Clock3 className="w-4 h-4 text-purple-500" />}
+		                        />
+		                        <button
+		                          type="button"
+		                          onClick={() => removeWindow(idx)}
+		                          aria-label="Remover janela"
+		                          className="w-11 h-11 rounded-lg bg-rose-500/10 text-rose-300 border border-rose-500/30 hover:bg-rose-500/15 grid place-items-center"
+		                        >
+		                          <Trash2 className="w-4 h-4" />
+		                          <span className="sr-only">Remover</span>
+		                        </button>
+		                      </div>
+		                    ))}
+	                  </div>
+	                </div>
+
+	                <div className="glass-panel bg-white/45 dark:bg-white/5 border border-white/20 rounded-2xl p-4 space-y-3">
+	                  <div>
+	                    <p className="text-sm font-semibold text-gray-900 dark:text-slate-50">Bloqueios (exceções)</p>
+	                    <p className="text-[11px] text-gray-500 dark:text-slate-300">Feriados, pausas e horários indisponíveis.</p>
+	                  </div>
+
+			                  <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
+			                    <div className="space-y-2 md:col-span-5 min-w-0">
+			                      <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">Data</label>
+		                      <input
+		                        type="date"
+		                        value={blockDate}
+		                        onChange={(e) => setBlockDate(e.target.value)}
+		                        className="w-full rounded-lg border border-white/30 dark:border-white/20 bg-white/80 dark:bg-white/15 px-3 py-2.5 min-h-[44px] text-sm text-gray-800 dark:text-slate-100"
+		                      />
+		                    </div>
+				                  <div className="space-y-2 md:col-span-7 min-w-0">
+			                      <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">Tipo</label>
+		                      <Dropdown
+		                        value={blockAllDay ? 'all' : 'range'}
+		                        onChange={(v) => setBlockAllDay(v === 'all')}
+		                        placement="top"
+		                        options={[
+		                          { id: 'all', label: 'Dia todo', hint: 'Bloqueia o dia inteiro', icon: CalendarDays },
+		                          { id: 'range', label: 'Faixa', hint: 'Bloqueia um horário', icon: Clock3 }
+		                        ]}
+		                      />
+		                    </div>
+			                    <div className="space-y-2 md:col-span-12">
+			                      <div className="flex md:justify-end">
+			                        <button
+			                          onClick={addBlock}
+			                          className="glass-purple w-full md:w-[220px] rounded-lg px-5 py-2.5 text-sm font-semibold flex items-center justify-center gap-2 min-h-[44px]"
+			                        >
+			                          <Plus className="w-4 h-4" />
+			                          Bloquear
+			                        </button>
+			                      </div>
+			                    </div>
+			                  </div>
+
+	                  {!blockAllDay ? (
+	                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+	                      <div className="space-y-2">
+	                        <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">Início</label>
+	                        <Dropdown
+	                          value={blockStart as any}
+	                          onChange={(v: any) => setBlockStart(v)}
+	                          options={timeOptions as any}
+	                          renderLeft={() => <Clock3 className="w-4 h-4 text-purple-500" />}
+	                          placement="top"
+	                        />
+	                      </div>
+	                      <div className="space-y-2">
+	                        <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">Fim</label>
+	                        <Dropdown
+	                          value={blockEnd as any}
+	                          onChange={(v: any) => setBlockEnd(v)}
+	                          options={timeOptions as any}
+	                          renderLeft={() => <Clock3 className="w-4 h-4 text-purple-500" />}
+	                          placement="top"
+	                        />
+	                      </div>
+	                    </div>
+	                  ) : null}
+
+	                  <div className="space-y-2">
+	                    <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">Motivo (opcional)</label>
+	                    <input
+	                      value={blockReason}
+	                      onChange={(e) => setBlockReason(e.target.value)}
+	                      className="w-full rounded-lg border border-white/30 dark:border-white/20 bg-white/80 dark:bg-white/15 px-3 py-2.5 min-h-[44px] text-sm text-gray-800 dark:text-slate-100"
+	                      placeholder="Ex: almoço, feriado, reunião interna..."
+	                    />
+	                  </div>
+
+	                  <div className="space-y-2">
+	                    {normalizeBlocks(config.blocks).length === 0 ? (
+	                      <p className="text-sm text-gray-600 dark:text-slate-300">Sem bloqueios.</p>
+	                    ) : (
+	                      normalizeBlocks(config.blocks).map((b, idx) => (
+	                        <div
+	                          key={idx}
+	                          className="flex items-center gap-2 glass-panel bg-white/50 dark:bg-white/5 border border-white/20 rounded-xl p-3"
+	                        >
+	                          <div className="text-sm text-gray-800 dark:text-slate-100">
+	                            <span className="font-semibold">{b.date}</span>{' '}
+	                            {'allDay' in b && b.allDay ? (
+	                              <span className="text-gray-500 dark:text-slate-300">• dia todo</span>
+	                            ) : (
+	                              <span className="text-gray-500 dark:text-slate-300">
+	                                • {(b as any).start}–{(b as any).end}
+	                              </span>
+	                            )}
+	                            {b.reason ? <span className="text-gray-500 dark:text-slate-300"> • {b.reason}</span> : null}
+	                          </div>
+	                          <button
+	                            onClick={() => removeBlock(idx)}
+	                            className="ml-auto px-3 py-2 rounded-lg text-sm font-semibold bg-rose-500/10 text-rose-300 border border-rose-500/30 hover:bg-rose-500/15 flex items-center gap-2 min-h-[44px]"
+	                          >
+	                            <Trash2 className="w-4 h-4" />
+	                            Remover
+	                          </button>
+	                        </div>
+	                      ))
+	                    )}
+	                  </div>
+	                </div>
+	              </div>
 	            </div>
 
-            <div className="space-y-2">
-              <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">Dias de atendimento</label>
-              <div className="flex flex-wrap gap-2">
-                {Object.keys(weekdayLabel)
-                  .map((k) => Number(k))
-                  .sort((a, b) => a - b)
-                  .map((d) => {
-                    const active = config.workingDays.includes(d);
-                    return (
-                      <button
-                        key={d}
-                        type="button"
-                        onClick={() =>
-                          setConfig((p) => ({
-                            ...p,
-                            workingDays: active ? p.workingDays.filter((x) => x !== d) : [...p.workingDays, d].sort((a, b) => a - b)
-                          }))
-                        }
-                        className={`px-3 py-1.5 rounded-full text-xs font-semibold border ${
-                          active
-                            ? 'glass-purple text-white border-transparent'
-                            : 'bg-white/70 dark:bg-white/10 border-white/30 text-gray-700 dark:text-slate-200 hover:bg-white/80 dark:hover:bg-white/15'
-                        }`}
-                      >
-                        {weekdayLabel[d]}
-                      </button>
-                    );
-                  })}
-              </div>
-            </div>
-          </div>
+	            <div className="relative">
+	              <div
+	                className={`glass-panel bg-white/45 dark:bg-white/5 border border-white/20 rounded-2xl p-4 space-y-3 ${
+	                  !availabilityOk ? 'opacity-60 blur-[1px] pointer-events-none select-none' : ''
+	                }`}
+	              >
+	                <div className="space-y-1">
+	                  <p className="text-base font-semibold text-gray-900 dark:text-slate-50 flex items-center gap-2">
+	                    <Mail className="w-5 h-5 text-indigo-400" />
+	                    Passo 2 • Notificações
+	                  </p>
+	                  <p className="text-[12px] text-gray-500 dark:text-slate-300">Ative lembretes e mensagens.</p>
+	                </div>
 
-          <div className="glass-panel bg-white/45 dark:bg-white/5 backdrop-blur-xl border border-white/20 rounded-2xl p-4 space-y-3">
-            <div className="flex items-center justify-between gap-3 flex-wrap">
-              <p className="text-sm font-semibold text-gray-900 dark:text-slate-50">Janelas de atendimento</p>
-              <button
-                type="button"
-                onClick={addWindow}
-                className="px-3 py-2 rounded-lg text-sm font-semibold bg-white/70 dark:bg-white/10 border border-white/30 text-gray-800 dark:text-slate-100 hover:bg-white/80 dark:hover:bg-white/15 flex items-center gap-2"
-              >
-                <Plus className="w-4 h-4" />
-                Adicionar
-              </button>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-              <div className="space-y-2">
-                <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">Slot (min)</label>
-                <input
-                  type="number"
-                  min={5}
-                  max={180}
-                  value={config.slotMinutes}
-                  onChange={(e) => setConfig((p) => ({ ...p, slotMinutes: Number(e.target.value) || 30 }))}
-                  className="w-full rounded-lg border border-white/30 dark:border-white/20 bg-white/80 dark:bg-white/15 px-3 py-2 text-sm text-gray-800 dark:text-slate-100"
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">Buffer (min)</label>
-                <input
-                  type="number"
-                  min={0}
-                  max={60}
-                  value={config.bufferMinutes}
-                  onChange={(e) => setConfig((p) => ({ ...p, bufferMinutes: Number(e.target.value) || 0 }))}
-                  className="w-full rounded-lg border border-white/30 dark:border-white/20 bg-white/80 dark:bg-white/15 px-3 py-2 text-sm text-gray-800 dark:text-slate-100"
-                />
-              </div>
-            </div>
-            <div className="space-y-2">
-              {normalizeWindows(config.windows).map((w, idx) => (
-                <div key={idx} className="flex items-center gap-2 flex-wrap">
-                  <input
-                    type="time"
-                    value={w.start}
-                    onChange={(e) => updateWindow(idx, { start: e.target.value })}
-                    className="rounded-lg border border-white/30 dark:border-white/20 bg-white/80 dark:bg-white/15 px-3 py-2 text-sm text-gray-800 dark:text-slate-100"
-                  />
-                  <span className="text-sm text-gray-500 dark:text-slate-300">até</span>
-                  <input
-                    type="time"
-                    value={w.end}
-                    onChange={(e) => updateWindow(idx, { end: e.target.value })}
-                    className="rounded-lg border border-white/30 dark:border-white/20 bg-white/80 dark:bg-white/15 px-3 py-2 text-sm text-gray-800 dark:text-slate-100"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => removeWindow(idx)}
-                    className="ml-auto px-3 py-2 rounded-lg text-sm font-semibold bg-rose-500/10 text-rose-300 border border-rose-500/30 hover:bg-rose-500/15 flex items-center gap-2"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                    Remover
-                  </button>
-                </div>
-              ))}
-            </div>
-          </div>
+	                <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
+	                  <div className="flex flex-wrap gap-2 lg:col-span-8">
+	                    <button
+	                      type="button"
+	                      onClick={() => setConfig((p) => ({ ...p, autoEmailConfirm: !p.autoEmailConfirm }))}
+	                      className={`px-3 py-2 min-h-[40px] rounded-xl border text-sm font-semibold inline-flex items-center gap-2 ${
+	                        config.autoEmailConfirm
+	                          ? 'glass-purple text-white border-transparent'
+	                          : 'bg-white/70 dark:bg-white/10 border-white/30 text-gray-700 dark:text-slate-200 hover:bg-white/80 dark:hover:bg-white/15'
+	                      }`}
+	                    >
+	                      <Mail className="w-4 h-4" />
+	                      <span className="whitespace-nowrap">Confirmação</span>
+	                    </button>
+	                    <button
+	                      type="button"
+	                      onClick={() => setConfig((p) => ({ ...p, autoEmailReminders: !p.autoEmailReminders }))}
+	                      className={`px-3 py-2 min-h-[40px] rounded-xl border text-sm font-semibold inline-flex items-center gap-2 ${
+	                        config.autoEmailReminders
+	                          ? 'glass-purple text-white border-transparent'
+	                          : 'bg-white/70 dark:bg-white/10 border-white/30 text-gray-700 dark:text-slate-200 hover:bg-white/80 dark:hover:bg-white/15'
+	                      }`}
+	                    >
+	                      <Clock3 className="w-4 h-4" />
+	                      <span className="whitespace-nowrap">Lembretes</span>
+	                      <span className={`${config.autoEmailReminders ? 'text-white/80' : 'text-gray-500 dark:text-slate-300'} text-xs font-bold whitespace-nowrap`}>
+	                        24h/1h/10m
+	                      </span>
+	                    </button>
+	                    <button
+	                      type="button"
+	                      onClick={() => setConfig((p) => ({ ...p, autoWhatsApp: !p.autoWhatsApp }))}
+	                      className={`px-3 py-2 min-h-[40px] rounded-xl border text-sm font-semibold inline-flex items-center gap-2 ${
+	                        config.autoWhatsApp
+	                          ? 'glass-purple text-white border-transparent'
+	                          : 'bg-white/70 dark:bg-white/10 border-white/30 text-gray-700 dark:text-slate-200 hover:bg-white/80 dark:hover:bg-white/15'
+	                      }`}
+	                    >
+	                      <MessageCircle className="w-4 h-4" />
+	                      <span className="whitespace-nowrap">WhatsApp</span>
+	                    </button>
+	                  </div>
 
-          <div className="glass-panel bg-white/45 dark:bg-white/5 backdrop-blur-xl border border-white/20 rounded-2xl p-4 space-y-3">
-            <p className="text-sm font-semibold text-gray-900 dark:text-slate-50">Bloqueios (exceções)</p>
-            <div className="grid grid-cols-1 md:grid-cols-5 gap-3 items-end">
-              <div className="space-y-2 md:col-span-2">
-                <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">Data</label>
-                <input
-                  type="date"
-                  value={blockDate}
-                  onChange={(e) => setBlockDate(e.target.value)}
-                  className="w-full rounded-lg border border-white/30 dark:border-white/20 bg-white/80 dark:bg-white/15 px-3 py-2 text-sm text-gray-800 dark:text-slate-100"
-                />
-              </div>
-	              <div className="space-y-2">
-	                <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">Tipo</label>
-	                <Dropdown
-	                  value={blockAllDay ? 'all' : 'range'}
-	                  onChange={(v) => setBlockAllDay(v === 'all')}
-	                  options={[
-	                    { id: 'all', label: 'Dia todo', hint: 'Bloqueia o dia inteiro', icon: CalendarDays },
-	                    { id: 'range', label: 'Faixa', hint: 'Bloqueia um horário', icon: Clock3 }
-	                  ]}
-	                />
+	                  <div className="space-y-2 lg:col-span-4">
+	                    <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">WhatsApp padrão</label>
+	                    <input
+	                      value={config.whatsappNumber || ''}
+	                      onChange={(e) => setConfig((p) => ({ ...p, whatsappNumber: e.target.value }))}
+	                      disabled={!config.autoWhatsApp}
+	                      className="w-full rounded-lg border border-white/30 dark:border-white/20 bg-white/80 dark:bg-white/15 px-3 py-2.5 min-h-[44px] text-sm text-gray-800 dark:text-slate-100 disabled:opacity-60"
+	                      placeholder="+55..."
+	                    />
+	                    <p className="text-[11px] text-gray-500 dark:text-slate-300">
+	                      Só é usado quando WhatsApp estiver ativo.
+	                    </p>
+	                  </div>
+	                </div>
 	              </div>
-              {!blockAllDay ? (
-                <div className="space-y-2">
-                  <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">Hora</label>
-                  <div className="flex gap-2">
-                    <input
-                      type="time"
-                      value={blockStart}
-                      onChange={(e) => setBlockStart(e.target.value)}
-                      className="w-full rounded-lg border border-white/30 dark:border-white/20 bg-white/80 dark:bg-white/15 px-3 py-2 text-sm text-gray-800 dark:text-slate-100"
-                    />
-                    <input
-                      type="time"
-                      value={blockEnd}
-                      onChange={(e) => setBlockEnd(e.target.value)}
-                      className="w-full rounded-lg border border-white/30 dark:border-white/20 bg-white/80 dark:bg-white/15 px-3 py-2 text-sm text-gray-800 dark:text-slate-100"
-                    />
-                  </div>
-                </div>
-              ) : (
-                <div />
-              )}
-              <div className="space-y-2">
-                <button onClick={addBlock} className="glass-purple w-full rounded-lg py-2 text-sm font-semibold flex items-center justify-center gap-2">
-                  <Plus className="w-4 h-4" />
-                  Bloquear
-                </button>
-              </div>
-            </div>
-            <div className="space-y-2">
-              <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">Motivo (opcional)</label>
-              <input
-                value={blockReason}
-                onChange={(e) => setBlockReason(e.target.value)}
-                className="w-full rounded-lg border border-white/30 dark:border-white/20 bg-white/80 dark:bg-white/15 px-3 py-2 text-sm text-gray-800 dark:text-slate-100"
-                placeholder="Ex: almoço, feriado, reunião interna..."
-              />
-            </div>
-            <div className="space-y-2">
-              {normalizeBlocks(config.blocks).length === 0 ? (
-                <p className="text-sm text-gray-600 dark:text-slate-300">Sem bloqueios.</p>
-              ) : (
-                normalizeBlocks(config.blocks).map((b, idx) => (
-                  <div key={idx} className="flex items-center gap-2 glass-panel bg-white/50 dark:bg-white/5 border border-white/20 rounded-xl p-3">
-                    <div className="text-sm text-gray-800 dark:text-slate-100">
-                      <span className="font-semibold">{b.date}</span>{' '}
-                      {'allDay' in b && b.allDay ? (
-                        <span className="text-gray-500 dark:text-slate-300">• dia todo</span>
-                      ) : (
-                        <span className="text-gray-500 dark:text-slate-300">
-                          • {(b as any).start}–{(b as any).end}
-                        </span>
-                      )}
-                      {b.reason ? <span className="text-gray-500 dark:text-slate-300"> • {b.reason}</span> : null}
-                    </div>
-                    <button
-                      onClick={() => removeBlock(idx)}
-                      className="ml-auto px-3 py-2 rounded-lg text-sm font-semibold bg-rose-500/10 text-rose-300 border border-rose-500/30 hover:bg-rose-500/15 flex items-center gap-2"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                      Remover
-                    </button>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
+	              {!availabilityOk ? (
+	                <div className="absolute inset-0 grid place-items-center">
+	                  <div className="px-4 py-3 rounded-xl border border-white/20 bg-black/40 backdrop-blur-sm text-white text-sm">
+	                    Complete o Passo 1 para desbloquear
+	                  </div>
+	                </div>
+	              ) : null}
+	            </div>
 
-          <div className="relative">
-          <div className={`glass-panel bg-white/45 dark:bg-white/5 backdrop-blur-xl border border-white/20 rounded-2xl p-4 space-y-3 ${!availabilityOk ? 'opacity-60 blur-[1px] pointer-events-none select-none' : ''}`}>
-            <p className="text-base font-semibold text-gray-900 dark:text-slate-50 flex items-center gap-2">
-              <Mail className="w-5 h-5 text-indigo-400" />
-              Passo 2 • Notificações
-            </p>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-              <button
-                type="button"
-                onClick={() => setConfig((p) => ({ ...p, autoEmailConfirm: !p.autoEmailConfirm }))}
-                className={`px-3 py-2 rounded-lg border text-sm font-semibold flex items-center gap-2 ${
-                  config.autoEmailConfirm ? 'glass-purple text-white border-transparent' : 'bg-white/70 dark:bg-white/10 border-white/30 text-gray-700 dark:text-slate-200'
-                }`}
-              >
-                <Mail className="w-4 h-4" />
-                Enviar confirmação (email)
-              </button>
-              <button
-                type="button"
-                onClick={() => setConfig((p) => ({ ...p, autoEmailReminders: !p.autoEmailReminders }))}
-                className={`px-3 py-2 rounded-lg border text-sm font-semibold flex items-center gap-2 ${
-                  config.autoEmailReminders ? 'glass-purple text-white border-transparent' : 'bg-white/70 dark:bg-white/10 border-white/30 text-gray-700 dark:text-slate-200'
-                }`}
-              >
-                <Clock3 className="w-4 h-4" />
-                Lembretes (24h/1h/10m)
-              </button>
-              <button
-                type="button"
-                onClick={() => setConfig((p) => ({ ...p, autoWhatsApp: !p.autoWhatsApp }))}
-                className={`px-3 py-2 rounded-lg border text-sm font-semibold flex items-center gap-2 ${
-                  config.autoWhatsApp ? 'glass-purple text-white border-transparent' : 'bg-white/70 dark:bg-white/10 border-white/30 text-gray-700 dark:text-slate-200'
-                }`}
-              >
-                <MessageCircle className="w-4 h-4" />
-                WhatsApp (link)
-              </button>
-            </div>
-            {config.autoWhatsApp ? (
-              <div className="space-y-2">
-                <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">WhatsApp padrão (opcional)</label>
-                <input
-                  value={config.whatsappNumber || ''}
-                  onChange={(e) => setConfig((p) => ({ ...p, whatsappNumber: e.target.value }))}
-                  className="w-full rounded-lg border border-white/30 dark:border-white/20 bg-white/80 dark:bg-white/15 px-3 py-2 text-sm text-gray-800 dark:text-slate-100"
-                  placeholder="+55..."
-                />
-                <p className="text-[11px] text-gray-500 dark:text-slate-300">Usado se o lead não tiver telefone.</p>
-              </div>
-            ) : null}
-          </div>
-          {!availabilityOk ? (
-            <div className="absolute inset-0 grid place-items-center">
-              <div className="px-4 py-3 rounded-xl border border-white/20 bg-black/40 backdrop-blur-xl text-white text-sm">
-                Complete o Passo 1 para desbloquear
-              </div>
-            </div>
-          ) : null}
-          </div>
+	            <div className="relative">
+	              <div
+	                className={`glass-panel bg-white/45 dark:bg-white/5 border border-white/20 rounded-2xl p-4 space-y-3 ${
+	                  !availabilityOk || !notificationsOk ? 'opacity-60 blur-[1px] pointer-events-none select-none' : ''
+	                }`}
+	              >
+	                <div className="flex items-center justify-between gap-3 flex-wrap">
+	                  <div className="space-y-1">
+	                    <p className="text-sm font-semibold text-gray-900 dark:text-slate-50">Passo 3 • Google Calendar (opcional)</p>
+	                    <p className="text-[12px] text-gray-500 dark:text-slate-300">Sincronize eventos se quiser.</p>
+	                  </div>
+	                  <button
+	                    type="button"
+	                    onClick={connectGoogleCalendar}
+	                    disabled={googleCal.loading || !currentUserId}
+	                    className="glass-purple px-4 py-2 rounded-lg text-sm font-semibold disabled:opacity-60 min-h-[44px]"
+	                  >
+	                    {googleCal.connected ? 'Conectado' : 'Conectar'}
+	                  </button>
+	                </div>
+	                <p className="text-sm text-gray-600 dark:text-slate-300">
+	                  {googleCal.message || (googleCal.configured ? 'Pronto para conectar.' : 'Backend não configurado.')}
+	                </p>
+	                {!googleCal.configured ? (
+	                  <p className="text-[11px] text-gray-500 dark:text-slate-300">
+	                    No `server.js`, defina `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` e `GOOGLE_REDIRECT_URI` (ex: `http://localhost:3001/calendar/google/callback`).
+	                  </p>
+	                ) : null}
+	              </div>
+	              {!availabilityOk || !notificationsOk ? (
+	                <div className="absolute inset-0 grid place-items-center">
+	                  <div className="px-4 py-3 rounded-xl border border-white/20 bg-black/40 backdrop-blur-sm text-white text-sm">
+	                    Complete os passos anteriores para desbloquear
+	                  </div>
+	                </div>
+	              ) : null}
+	            </div>
 
-          <div className="relative">
-          <div className={`glass-panel bg-white/45 dark:bg-white/5 backdrop-blur-xl border border-white/20 rounded-2xl p-4 space-y-3 ${(!availabilityOk || !notificationsOk) ? 'opacity-60 blur-[1px] pointer-events-none select-none' : ''}`}>
-            <div className="flex items-center justify-between gap-3 flex-wrap">
-              <p className="text-sm font-semibold text-gray-900 dark:text-slate-50">Passo 3 • Google Calendar (opcional)</p>
-              <button
-                type="button"
-                onClick={connectGoogleCalendar}
-                disabled={googleCal.loading || !currentUserId}
-                className="glass-purple px-4 py-2 rounded-lg text-sm font-semibold disabled:opacity-60"
-              >
-                {googleCal.connected ? 'Conectado' : 'Conectar'}
-              </button>
-            </div>
-            <p className="text-sm text-gray-600 dark:text-slate-300">
-              {googleCal.message || (googleCal.configured ? 'Pronto para conectar.' : 'Backend não configurado.')}
-            </p>
-            {!googleCal.configured ? (
-              <p className="text-[11px] text-gray-500 dark:text-slate-300">
-                No `server.js`, defina `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` e `GOOGLE_REDIRECT_URI` (ex: `http://localhost:3001/calendar/google/callback`).
-              </p>
-            ) : null}
-          </div>
-          {(!availabilityOk || !notificationsOk) ? (
-            <div className="absolute inset-0 grid place-items-center">
-              <div className="px-4 py-3 rounded-xl border border-white/20 bg-black/40 backdrop-blur-xl text-white text-sm">
-                Complete os passos anteriores para desbloquear
-              </div>
-            </div>
-          ) : null}
-          </div>
-
-          <div className="glass-panel bg-white/45 dark:bg-white/5 backdrop-blur-xl border border-white/20 rounded-2xl p-4">
-            <p className="text-sm text-gray-600 dark:text-slate-300">
-              Dica: para lembretes por email funcionarem, rode o backend `server.js` na porta 3001.
-              Base atual: <span className="font-semibold">{resolveBackendBaseUrl()}</span>
-            </p>
-          </div>
-        </div>
-        )}
+	            <div className="glass-panel bg-white/45 dark:bg-white/5 border border-white/20 rounded-2xl p-4">
+	              <p className="text-sm text-gray-600 dark:text-slate-300">
+	                Dica: para lembretes por email funcionarem, rode o backend `server.js` na porta 3001. Base atual:{' '}
+	                <span className="font-semibold">{resolveBackendBaseUrl()}</span>
+	              </p>
+	            </div>
+	          </div>
+	        )}
 
       {tab === 'agendar' && (
         <div className="relative">
           {setupStep < 3 ? (
-            <div className="mb-4 glass-panel bg-white/45 dark:bg-white/5 backdrop-blur-xl border border-white/20 rounded-2xl p-4 text-sm text-gray-700 dark:text-slate-200 flex items-center gap-2">
+            <div className="mb-4 glass-panel bg-white/45 dark:bg-white/5 border border-white/20 rounded-2xl p-4 text-sm text-gray-700 dark:text-slate-200 flex items-center gap-2">
               <AlertTriangle className="w-4 h-4 text-amber-400" />
               Complete a Configuração (Passo 1 e 2) para desbloquear o agendamento.
             </div>
           ) : null}
         <div className={`grid grid-cols-1 lg:grid-cols-5 gap-4 ${setupStep < 3 ? 'opacity-60 blur-[1px] pointer-events-none select-none' : ''}`}>
-          <div className="lg:col-span-3 glass-panel bg-white/45 dark:bg-white/5 backdrop-blur-xl rounded-2xl p-4 border border-white/10 shadow-lg space-y-4">
+	          <div className="lg:col-span-3 glass-panel bg-white/45 dark:bg-white/5 rounded-2xl p-4 border border-white/10 shadow-lg space-y-4">
             <div className="flex items-center justify-between gap-3 flex-wrap">
               <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-50 flex items-center gap-2">
                 <Plus className="w-5 h-5 text-indigo-400" />
@@ -1549,73 +1859,72 @@ const Calendar: React.FC<CalendarProps> = ({
 	              </div>
             </div>
 
-            <div className="space-y-2">
-              <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">Horário</label>
-	              {slots.length === 0 ? (
-	                <div className="text-sm text-gray-600 dark:text-slate-300 flex items-center gap-2">
-	                  <AlertTriangle className="w-4 h-4 text-amber-400" />
-	                  Ajuste sua disponibilidade em Configuração.
-	                </div>
-		              ) : (
-		                <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2 w-fit max-w-full">
-		                  {slots.map((s) => {
-	                      const selected = slotIso === s.iso;
-	                      const [hhRaw, mmRaw] = (s.label || '').split(':');
-	                      const hour = Number(hhRaw);
-	                      const minute = Number(mmRaw);
-	                      const hour12 = Number.isFinite(hour) ? (hour % 12) || 12 : null;
-	                      const ampm = !Number.isFinite(hour) ? '' : hour >= 12 ? 'PM' : 'AM';
-	                      const displayTime =
-	                        hour12 && Number.isFinite(minute) ? `${hour12}:${pad2(minute)}` : s.label;
-	                      const icon = selected ? (
-	                        <CheckCircle2 className="w-4 h-4" />
-	                      ) : s.disabled ? (
-	                        <X className="w-4 h-4" />
-	                      ) : (
-	                        <Clock3 className="w-4 h-4" />
-	                      );
-	                      const iconClass = selected
-	                        ? 'text-white'
-	                        : s.disabled
-	                          ? 'text-slate-500'
-	                          : 'text-purple-500 dark:text-purple-300';
-	                      return (
-	                        <button
-	                          key={s.iso}
-	                          type="button"
-	                          disabled={s.disabled}
-	                          onClick={() => setSlotIso(s.iso)}
-	                          className={`px-2.5 py-2 rounded-xl text-sm font-semibold border transition w-[108px] flex items-center justify-center gap-2 ${
-	                            selected
-	                              ? 'glass-purple text-white border-transparent shadow-lg shadow-purple-900/20'
-	                              : s.disabled
-	                                ? 'bg-slate-500/10 border-slate-400/30 text-slate-500 cursor-not-allowed'
-	                                : 'bg-purple-500/10 border-purple-400/40 text-purple-800 dark:text-purple-100 hover:bg-purple-500/15 hover:shadow-md'
-	                          }`}
-	                        >
-	                          <span className="flex items-center gap-2 min-w-0">
-	                            <span className={iconClass}>{icon}</span>
-	                            <span className="tabular-nums">{displayTime}</span>
-	                            {ampm ? (
-	                              <span
-	                                className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full border ${
-	                                  selected
-	                                    ? 'border-white/30 bg-white/10 text-white/90'
-	                                    : s.disabled
-	                                      ? 'border-slate-400/30 bg-slate-500/10 text-slate-500'
-	                                      : 'border-purple-400/30 bg-purple-500/10 text-purple-800 dark:text-purple-100'
-	                                }`}
-	                              >
-	                                {ampm}
-	                              </span>
-	                            ) : null}
-	                          </span>
+            <div className="space-y-3">
+              <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">Horário disponível</label>
+              {slots.length === 0 ? (
+                <div className="text-sm text-gray-600 dark:text-slate-300 flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4 text-amber-400" />
+                  Ajuste sua disponibilidade em Configuração.
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <div className="flex flex-wrap gap-2">
+                    {slots.map((s) => {
+                      const selected = slotIso === s.iso;
+                      const [hhRaw, mmRaw] = (s.label || '').split(':');
+                      const hour = Number(hhRaw);
+                      const minute = Number(mmRaw);
+                      const hour12 = Number.isFinite(hour) ? (hour % 12) || 12 : null;
+                      const ampm = !Number.isFinite(hour) ? '' : hour >= 12 ? 'PM' : 'AM';
+                      const displayTime = hour12 && Number.isFinite(minute) ? `${hour12}:${pad2(minute)}` : s.label;
+                      
+                      return (
+		                        <button
+		                          key={s.iso}
+		                          type="button"
+		                          disabled={s.disabled}
+			                          onClick={() => setSlotIso(s.iso)}
+				                          className={`relative px-4 py-3 rounded-xl text-sm font-semibold transition-all duration-200 min-w-[92px] ${
+				                            selected
+				                              ? 'glass-purple text-white shadow-lg shadow-purple-900/25 scale-105 border border-white/10'
+				                              : s.disabled
+				                                ? 'bg-black/20 text-slate-600 cursor-not-allowed opacity-60 border border-white/5'
+				                                : 'bg-indigo-950/45 text-slate-100 border border-purple-400/30 hover:border-purple-300/50 hover:bg-purple-500/12 hover:scale-102'
+				                          }`}
+				                        >
+				                          <div className="flex flex-col items-center gap-1">
+				                            <span
+				                              className={`text-lg font-extrabold tabular-nums ${
+				                                selected ? 'text-white drop-shadow' : s.disabled ? 'text-slate-600' : 'text-white drop-shadow'
+				                              }`}
+				                            >
+				                              {displayTime}
+				                            </span>
+				                            <span className={`text-xs font-medium ${
+				                              selected ? 'text-white/80' : s.disabled ? 'text-slate-700' : 'text-white/70'
+				                            }`}>
+				                              {ampm}
+				                            </span>
+				                          </div>
+	                          {/* sem badge de check no horário selecionado */}
 	                        </button>
-	                      );
-	                    })}
-		                </div>
-		              )}
-		            </div>
+                      );
+                    })}
+                  </div>
+                  {slotIso && (
+                    <div className="glass-panel bg-white/60 dark:bg-white/10 border border-white/20 rounded-lg p-3">
+                      <div className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-200">
+                        <Clock3 className="w-4 h-4 text-purple-500" />
+                        <span className="font-medium">Horário selecionado:</span>
+                        <span className="font-bold text-purple-600 dark:text-purple-400">
+                          {formatDateTime(slotIso, fullConfig.timezone)}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="md:col-span-2 space-y-2">
@@ -1724,7 +2033,7 @@ const Calendar: React.FC<CalendarProps> = ({
             </div>
           </div>
 
-          <div className="lg:col-span-2 glass-panel bg-white/45 dark:bg-white/5 backdrop-blur-xl rounded-2xl p-4 border border-white/10 shadow-lg space-y-3">
+          <div className="lg:col-span-2 glass-panel bg-white/45 dark:bg-white/5 rounded-2xl p-4 border border-white/10 shadow-lg space-y-3">
             <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-50">Do dia</h3>
             {dayAppointments.length === 0 ? (
               <p className="text-sm text-gray-600 dark:text-slate-300">Nenhum agendamento nesse dia.</p>
@@ -1733,7 +2042,7 @@ const Calendar: React.FC<CalendarProps> = ({
                 {dayAppointments.map((a) => (
                   <div
                     key={a.id}
-                    className="glass-panel bg-white/45 dark:bg-white/5 backdrop-blur-xl border border-white/20 rounded-2xl p-3 flex items-start justify-between gap-3"
+                    className="glass-panel bg-white/45 dark:bg-white/5 border border-white/20 rounded-2xl p-3 flex items-start justify-between gap-3"
                   >
                     <div>
                       <p className="text-sm font-semibold text-gray-900 dark:text-slate-50">
@@ -1806,12 +2115,12 @@ const Calendar: React.FC<CalendarProps> = ({
       {tab === 'agenda' && (
         <div className="relative">
           {setupStep < 3 ? (
-            <div className="mb-4 glass-panel bg-white/45 dark:bg-white/5 backdrop-blur-xl border border-white/20 rounded-2xl p-4 text-sm text-gray-700 dark:text-slate-200 flex items-center gap-2">
+            <div className="mb-4 glass-panel bg-white/45 dark:bg-white/5 border border-white/20 rounded-2xl p-4 text-sm text-gray-700 dark:text-slate-200 flex items-center gap-2">
               <AlertTriangle className="w-4 h-4 text-amber-400" />
               Complete a Configuração (Passo 1 e 2) para desbloquear a agenda.
             </div>
           ) : null}
-        <div className={`glass-panel bg-white/45 dark:bg-white/5 backdrop-blur-xl rounded-2xl p-4 border border-white/10 shadow-lg space-y-4 ${setupStep < 3 ? 'opacity-60 blur-[1px] pointer-events-none select-none' : ''}`}>
+        <div className={`glass-panel bg-white/45 dark:bg-white/5 rounded-2xl p-4 border border-white/10 shadow-lg space-y-4 ${setupStep < 3 ? 'opacity-60 blur-[1px] pointer-events-none select-none' : ''}`}>
           <div className="flex items-center justify-between gap-3 flex-wrap">
             <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-50">Próximos agendamentos</h3>
             <button onClick={() => requestTab('agendar')} className="glass-purple px-4 py-2 rounded-lg text-sm font-semibold flex items-center gap-2">

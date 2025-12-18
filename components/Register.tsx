@@ -192,7 +192,7 @@ const Register: React.FC<RegisterProps> = ({ onRegister, onSwitchToLogin }) => {
   };
 
   return (
-    <div className="dark min-h-screen relative overflow-hidden bg-transparent flex items-center justify-center px-4 py-10 text-white">
+    <div className="dark min-h-[100svh] relative overflow-hidden bg-transparent flex items-start md:items-center justify-center px-4 py-6 md:py-10 text-white">
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_14%_18%,rgba(168,85,247,0.22),transparent_38%),radial-gradient(circle_at_86%_16%,rgba(217,70,239,0.14),transparent_40%),radial-gradient(circle_at_55%_84%,rgba(59,130,246,0.10),transparent_44%)] opacity-95" />
       <div className="pointer-events-none absolute inset-0 opacity-35 bg-[linear-gradient(to_right,rgba(168,85,247,0.14)_1px,transparent_1px),linear-gradient(to_bottom,rgba(168,85,247,0.14)_1px,transparent_1px),linear-gradient(to_right,rgba(255,255,255,0.06)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.06)_1px,transparent_1px)] bg-[size:56px_56px,56px_56px,8px_8px,8px_8px] [mask-image:radial-gradient(circle_at_45%_18%,black_0%,transparent_70%)]" />
       <div className="pointer-events-none absolute -left-40 -top-36 h-96 w-96 rounded-full bg-purple-500/14 blur-3xl" />
@@ -212,7 +212,7 @@ const Register: React.FC<RegisterProps> = ({ onRegister, onSwitchToLogin }) => {
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(255,255,255,0.04),transparent_30%)]" />
       </div>
 
-      <div className="relative w-full max-w-6xl space-y-4 z-10 mx-auto">
+	      <div className="relative w-full max-w-md md:max-w-3xl lg:max-w-6xl space-y-4 z-10 mx-auto">
         <div className="flex flex-wrap items-center justify-end gap-2">
           <button
             type="button"
@@ -223,34 +223,39 @@ const Register: React.FC<RegisterProps> = ({ onRegister, onSwitchToLogin }) => {
           </button>
         </div>
 
-        <div className="glass-panel relative overflow-visible rounded-md border border-white/10 bg-white/5 backdrop-blur-2xl shadow-2xl shadow-purple-900/40">
+	        <div className="glass-panel relative overflow-visible rounded-md border border-white/10 bg-white/5 backdrop-blur-2xl shadow-2xl shadow-purple-900/40">
           <div className="absolute inset-0 pointer-events-none">
             <div className="absolute inset-0 bg-gradient-to-br from-white/10 via-transparent to-white/5" />
             <div className="absolute w-56 h-56 bg-purple-500/20 blur-3xl -top-16 -right-10" />
           </div>
 
-          <div className="relative p-6 space-y-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-white/60 text-xs">GeoCRM Intelligence</p>
-                <h2 className="text-2xl font-bold text-white">Crie sua conta</h2>
-                <p className="text-white/60 text-sm mt-1">Cadastro em etapas rápidas.</p>
-              </div>
-                <img src="https://i.imgur.com/xdP1hfd.png" alt="GeoCRM Logo" className="h-20 w-auto object-contain drop-shadow" />
-            </div>
+	          <div className="relative p-5 sm:p-6 space-y-6">
+	            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+	              <div>
+	                <p className="text-white/60 text-xs">GeoCRM Intelligence</p>
+	                <h2 className="text-2xl sm:text-3xl font-bold text-white">Crie sua conta</h2>
+	                <p className="text-white/60 text-sm mt-1">Cadastro em etapas rápidas.</p>
+	              </div>
+	                <img
+                    src="https://i.imgur.com/xdP1hfd.png"
+                    alt="GeoCRM Logo"
+                    className="h-12 sm:h-16 md:h-20 w-auto object-contain drop-shadow"
+                    loading="lazy"
+                  />
+	            </div>
 
-            <div className="flex flex-wrap items-center gap-2">
-              {steps.map((step, index) => (
-                <React.Fragment key={step.id}>
-                  <div
-                    className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs transition-all ${
-                      currentStep === step.id
-                        ? 'glass-purple text-white'
-                        : currentStep > step.id
-                          ? 'bg-emerald-500/20 text-emerald-200 border border-emerald-500/30'
-                          : 'bg-white/5 text-white/60 border border-white/15'
-                    }`}
-                  >
+	            <div className="-mx-2 px-2 flex gap-2 overflow-x-auto custom-scrollbar pb-2">
+	              {steps.map((step, index) => (
+	                <React.Fragment key={step.id}>
+	                  <div
+	                    className={`shrink-0 flex items-center gap-2 px-3 py-2 rounded-lg text-xs transition-all ${
+	                      currentStep === step.id
+	                        ? 'glass-purple text-white'
+	                        : currentStep > step.id
+	                          ? 'bg-emerald-500/20 text-emerald-200 border border-emerald-500/30'
+	                          : 'bg-white/5 text-white/60 border border-white/15'
+	                    }`}
+	                  >
                     <span className="w-5 h-5 rounded-full bg-white/10 border border-white/20 flex items-center justify-center text-[11px] font-bold">
                       {currentStep > step.id ? (
                         <CheckCircle2 className="w-3.5 h-3.5" />
@@ -263,16 +268,16 @@ const Register: React.FC<RegisterProps> = ({ onRegister, onSwitchToLogin }) => {
                       <div className="text-[10px] opacity-80">{step.desc}</div>
                     </div>
                   </div>
-                  {index < steps.length - 1 && (
-                    <div
-                      className={`hidden md:block w-8 h-px ${
-                        currentStep > step.id ? 'bg-emerald-400' : 'bg-white/20'
-                      }`}
-                    />
-                  )}
-                </React.Fragment>
-              ))}
-            </div>
+	                  {index < steps.length - 1 && (
+	                    <div
+	                      className={`hidden md:block w-8 h-px ${
+	                        currentStep > step.id ? 'bg-emerald-400' : 'bg-white/20'
+	                      }`}
+	                    />
+	                  )}
+	                </React.Fragment>
+	              ))}
+	            </div>
 
             <form onSubmit={handleRegisterSubmit} className="space-y-4">
               {currentStep === 1 && (
@@ -377,23 +382,23 @@ const Register: React.FC<RegisterProps> = ({ onRegister, onSwitchToLogin }) => {
                 </div>
               )}
 
-              {currentStep === 2 && (
-                <div className="space-y-4 animate-in slide-in-from-right-5 duration-300">
-                  <div className="space-y-3">
-                    <label className="text-xs uppercase tracking-[0.1em] text-white/70 font-semibold">Escolha seu plano</label>
-                    <div className="grid grid-cols-2 gap-3">
-                      {renderPlanCard('Start', 'Start', 'Para começar rápido', ['50 leads/mês', '1 automação'], 'bg-blue-500/30')}
-                      {renderPlanCard('Pro', 'Pro', 'Para squads com IA', ['200 leads/mês', '3 automações'], 'bg-purple-500/40')}
-                      {renderPlanCard('Growth', 'Growth', 'Escala com times', ['1000 leads/mês', '10 automações'], 'bg-pink-500/30')}
-                      {renderPlanCard('Enterprise', 'Enterprise', 'SSO e suporte dedicado', ['Ilimitado', 'SLA dedicado'], 'bg-emerald-500/30')}
-                    </div>
-                  </div>
-                  <div className="flex justify-between">
-                    <button type="button" onClick={prevStep} className="px-6 py-2 rounded-md text-sm border border-white/15 bg-white/5 text-white/80">Voltar</button>
-                    <button type="button" onClick={nextStep} className="glass-purple px-6 py-2 rounded-md text-sm font-semibold">Próximo</button>
-                  </div>
-                </div>
-              )}
+	              {currentStep === 2 && (
+	                <div className="space-y-4 animate-in slide-in-from-right-5 duration-300">
+	                  <div className="space-y-3">
+	                    <label className="text-xs uppercase tracking-[0.1em] text-white/70 font-semibold">Escolha seu plano</label>
+	                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+	                      {renderPlanCard('Start', 'Start', 'Para começar rápido', ['50 leads/mês', '1 automação'], 'bg-blue-500/30')}
+	                      {renderPlanCard('Pro', 'Pro', 'Para squads com IA', ['200 leads/mês', '3 automações'], 'bg-purple-500/40')}
+	                      {renderPlanCard('Growth', 'Growth', 'Escala com times', ['1000 leads/mês', '10 automações'], 'bg-pink-500/30')}
+	                      {renderPlanCard('Enterprise', 'Enterprise', 'SSO e suporte dedicado', ['Ilimitado', 'SLA dedicado'], 'bg-emerald-500/30')}
+	                    </div>
+	                  </div>
+	                  <div className="flex flex-col sm:flex-row gap-2 sm:justify-between">
+	                    <button type="button" onClick={prevStep} className="w-full sm:w-auto px-6 py-2.5 rounded-md text-sm border border-white/15 bg-white/5 text-white/80">Voltar</button>
+	                    <button type="button" onClick={nextStep} className="w-full sm:w-auto glass-purple px-6 py-2.5 rounded-md text-sm font-semibold">Próximo</button>
+	                  </div>
+	                </div>
+	              )}
 
               {currentStep === 3 && (
                 <div className="space-y-4 animate-in slide-in-from-right-5 duration-300">
@@ -439,12 +444,12 @@ const Register: React.FC<RegisterProps> = ({ onRegister, onSwitchToLogin }) => {
                       />
                     </div>
                   </div>
-                  <div className="flex justify-between">
-                    <button type="button" onClick={prevStep} className="px-6 py-2 rounded-md text-sm border border-white/15 bg-white/5 text-white/80">Voltar</button>
-                    <button type="button" onClick={nextStep} className="glass-purple px-6 py-2 rounded-md text-sm font-semibold">Próximo</button>
-                  </div>
-                </div>
-              )}
+	                  <div className="flex flex-col sm:flex-row gap-2 sm:justify-between">
+	                    <button type="button" onClick={prevStep} className="w-full sm:w-auto px-6 py-2.5 rounded-md text-sm border border-white/15 bg-white/5 text-white/80">Voltar</button>
+	                    <button type="button" onClick={nextStep} className="w-full sm:w-auto glass-purple px-6 py-2.5 rounded-md text-sm font-semibold">Próximo</button>
+	                  </div>
+	                </div>
+	              )}
 
               {currentStep === 4 && (
                 <div className="space-y-4 animate-in slide-in-from-right-5 duration-300">
@@ -483,19 +488,19 @@ const Register: React.FC<RegisterProps> = ({ onRegister, onSwitchToLogin }) => {
                   {error && (
                     <p className="text-xs text-red-100 bg-red-500/15 border border-red-400/30 rounded-lg py-2 px-3">{error}</p>
                   )}
-                  <div className="flex justify-between">
-                    <button type="button" onClick={prevStep} className="px-6 py-2 rounded-md text-sm border border-white/15 bg-white/5 text-white/80">Voltar</button>
-                    <button
-                      type="submit"
-                      disabled={loading}
-                      className="glass-purple px-6 py-2 rounded-md text-sm font-semibold flex items-center gap-2"
-                    >
-                      {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Criar Conta'}
-                      {!loading && <Rocket className="w-4 h-4" />}
-                    </button>
-                  </div>
-                </div>
-              )}
+	                  <div className="flex flex-col sm:flex-row gap-2 sm:justify-between">
+	                    <button type="button" onClick={prevStep} className="w-full sm:w-auto px-6 py-2.5 rounded-md text-sm border border-white/15 bg-white/5 text-white/80">Voltar</button>
+	                    <button
+	                      type="submit"
+	                      disabled={loading}
+	                      className="w-full sm:w-auto glass-purple px-6 py-2.5 rounded-md text-sm font-semibold flex items-center justify-center gap-2"
+	                    >
+	                      {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Criar Conta'}
+	                      {!loading && <Rocket className="w-4 h-4" />}
+	                    </button>
+	                  </div>
+	                </div>
+	              )}
             </form>
           </div>
         </div>

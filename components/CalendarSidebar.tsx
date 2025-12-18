@@ -19,7 +19,7 @@ const CalendarSidebar: React.FC<CalendarSidebarProps> = ({ tab, setTab, persistL
   ];
 
   return (
-    <aside className="hidden lg:block w-full max-w-[260px] glass-panel bg-white/50 dark:bg-white/5 backdrop-blur-xl border border-white/20 rounded-3xl p-4 h-fit sticky top-6">
+    <aside className="hidden lg:block w-full max-w-[260px] glass-panel bg-white/50 dark:bg-white/5 border border-white/20 rounded-3xl p-4 h-fit sticky top-6">
       <div className="flex items-center justify-between gap-2 mb-3">
         <div className="text-xs uppercase tracking-[0.3em] text-gray-500 dark:text-slate-300 font-semibold">Calendário</div>
         {persistLabel ? (

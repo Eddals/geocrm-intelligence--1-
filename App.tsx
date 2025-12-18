@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import Sidebar from './components/Sidebar';
 import Dashboard from './components/Dashboard';
 import LeadMap from './components/LeadMap';
@@ -167,14 +168,51 @@ const PLAN_RULES: Record<PlanTier, {
     }
 };
 
+const VIEW_PATHS: Record<ViewMode, string> = {
+    dashboard: '/dashboard',
+    map: '/map',
+    pipeline: '/pipeline',
+    discovery: '/discovery',
+    calendar: '/calendar',
+    settings: '/settings',
+};
+
+const viewFromPathname = (pathname: string): ViewMode => {
+    const normalized = pathname.replace(/\/+$/, '') || '/';
+    if (normalized === '/' || normalized.startsWith('/dashboard')) return 'dashboard';
+    if (normalized.startsWith('/map')) return 'map';
+    if (normalized.startsWith('/pipeline')) return 'pipeline';
+    if (normalized.startsWith('/discovery')) return 'discovery';
+    if (normalized.startsWith('/calendar')) return 'calendar';
+    if (normalized.startsWith('/settings')) return 'settings';
+    return 'dashboard';
+};
+
+const viewLabel = (view: ViewMode) => {
+    switch (view) {
+        case 'dashboard':
+            return 'Dashboard';
+        case 'map':
+            return 'Mapa Inteligente';
+        case 'pipeline':
+            return 'CRM Pipeline';
+        case 'discovery':
+            return 'Captação de Leads';
+        case 'calendar':
+            return 'Calendário';
+        case 'settings':
+            return 'Configurações';
+        default:
+            return 'Dashboard';
+    }
+};
+
 const App: React.FC = () => {
+  const navigate = useNavigate();
   // --- AUTH STATE ---
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
-  const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
   const [isSavingSettings, setIsSavingSettings] = useState(false);
-
-  const [currentView, setCurrentView] = useState<ViewMode>('dashboard');
   
   // --- PERSISTENT STATE INITIALIZATION ---
   const [leads, setLeads] = useState<Lead[]>([]);
@@ -203,6 +241,12 @@ const App: React.FC = () => {
 
   const activePlan: PlanTier = settings.subscriptionPlan || 'Start';
   const planRules = PLAN_RULES[activePlan];
+
+  const location = useLocation();
+  const currentView = viewFromPathname(location.pathname);
+  const setCurrentView = (view: ViewMode) => {
+      navigate(VIEW_PATHS[view] || '/dashboard');
+  };
 
   // --- PLAN + USAGE HELPERS ---
   const leadsCreatedThisMonth = (list: Lead[]) => {
@@ -312,9 +356,9 @@ const App: React.FC = () => {
       }
   };
 
-  const handleLogin = async (userData?: Partial<AppSettings> & { id?: string }) => {
-      if (userData) {
-          setSettings(prev => ({
+	  const handleLogin = async (userData?: Partial<AppSettings> & { id?: string }) => {
+	      if (userData) {
+	          setSettings(prev => ({
               ...prev,
               userName: userData.userName || prev.userName,
               userEmail: userData.userEmail || prev.userEmail,
@@ -348,20 +392,18 @@ const App: React.FC = () => {
                   }
               };
               localStorage.setItem('geocrm_auth', JSON.stringify(authPayload));
-          }
-      }
-      setIsAuthenticated(true);
-      setAuthMode('login');
-  };
+	          }
+	      }
+	      setIsAuthenticated(true);
+	  };
 
-  const handleLogout = () => {
-      setIsAuthenticated(false);
-      setCurrentUserId(null);
-      setLeads([]);
-      setAuthMode('login');
-      localStorage.removeItem('geocrm_auth');
-      setCurrentView('dashboard'); // Reset view on logout
-  };
+	  const handleLogout = () => {
+	      setIsAuthenticated(false);
+	      setCurrentUserId(null);
+	      setLeads([]);
+	      localStorage.removeItem('geocrm_auth');
+	      navigate('/login', { replace: true });
+	  };
 
   const handleUpdateSettings = async (newSettings: AppSettings) => {
       setSettings(newSettings);
@@ -780,20 +822,51 @@ const App: React.FC = () => {
     }
   };
 
-  // If not authenticated, show Auth pages
-  if (!isAuthenticated) {
-      return authMode === 'login' ? (
-        <Login onLogin={handleLogin} onSwitchToRegister={() => setAuthMode('register')} />
-      ) : (
-        <Register onRegister={handleLogin} onSwitchToLogin={() => setAuthMode('login')} />
-      );
-  }
+	  if (!authLoaded) {
+	      return <div className="dark min-h-[100svh] bg-transparent" />;
+	  }
 
-  return (
-    <div className={`app-shell flex min-h-screen bg-transparent text-gray-900 dark:text-slate-100 font-sans transition-colors duration-200 relative overflow-hidden`}>
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_14%_18%,rgba(168,85,247,0.22),transparent_38%),radial-gradient(circle_at_86%_16%,rgba(217,70,239,0.14),transparent_40%),radial-gradient(circle_at_55%_84%,rgba(59,130,246,0.10),transparent_44%)] opacity-95" />
-      <div className="pointer-events-none absolute inset-0 opacity-35 bg-[linear-gradient(to_right,rgba(168,85,247,0.14)_1px,transparent_1px),linear-gradient(to_bottom,rgba(168,85,247,0.14)_1px,transparent_1px),linear-gradient(to_right,rgba(255,255,255,0.06)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.06)_1px,transparent_1px)] bg-[size:56px_56px,56px_56px,8px_8px,8px_8px] [mask-image:radial-gradient(circle_at_45%_18%,black_0%,transparent_70%)]" />
-      <div className="pointer-events-none absolute -left-40 -top-36 h-96 w-96 rounded-full bg-purple-500/14 blur-3xl" />
+	  const LoginRoute: React.FC = () => {
+	      const loc = useLocation();
+	      const nav = useNavigate();
+	      if (isAuthenticated) return <Navigate to="/dashboard" replace />;
+	      const from = (loc.state as any)?.from as string | undefined;
+	      return (
+	          <Login
+	              onLogin={async (userData) => {
+	                  await handleLogin(userData);
+	                  nav(from || '/dashboard', { replace: true });
+	              }}
+	              onSwitchToRegister={() => nav('/register')}
+	          />
+	      );
+	  };
+
+	  const RegisterRoute: React.FC = () => {
+	      const nav = useNavigate();
+	      if (isAuthenticated) return <Navigate to="/dashboard" replace />;
+	      return (
+	          <Register
+	              onRegister={async (userData) => {
+	                  await handleLogin(userData);
+	                  nav('/dashboard', { replace: true });
+	              }}
+	              onSwitchToLogin={() => nav('/login')}
+	          />
+	      );
+	  };
+
+	  const ProtectedShell: React.FC = () => {
+	      const loc = useLocation();
+	      if (!isAuthenticated) {
+	          return <Navigate to="/login" replace state={{ from: loc.pathname }} />;
+	      }
+
+	      return (
+	    <div className={`app-shell flex min-h-screen bg-transparent text-gray-900 dark:text-slate-100 font-sans transition-colors duration-200 relative overflow-hidden`}>
+	      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_14%_18%,rgba(168,85,247,0.22),transparent_38%),radial-gradient(circle_at_86%_16%,rgba(217,70,239,0.14),transparent_40%),radial-gradient(circle_at_55%_84%,rgba(59,130,246,0.10),transparent_44%)] opacity-95" />
+	      <div className="pointer-events-none absolute inset-0 opacity-35 bg-[linear-gradient(to_right,rgba(168,85,247,0.14)_1px,transparent_1px),linear-gradient(to_bottom,rgba(168,85,247,0.14)_1px,transparent_1px),linear-gradient(to_right,rgba(255,255,255,0.06)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.06)_1px,transparent_1px)] bg-[size:56px_56px,56px_56px,8px_8px,8px_8px] [mask-image:radial-gradient(circle_at_45%_18%,black_0%,transparent_70%)]" />
+	      <div className="pointer-events-none absolute -left-40 -top-36 h-96 w-96 rounded-full bg-purple-500/14 blur-3xl" />
       <div className="pointer-events-none absolute -right-36 top-10 h-80 w-80 rounded-full bg-fuchsia-500/10 blur-3xl" />
       <div className="pointer-events-none absolute right-24 bottom-10 h-72 w-72 rounded-full bg-indigo-500/12 blur-3xl" />
       <Sidebar 
@@ -883,8 +956,8 @@ const App: React.FC = () => {
               <div>
                 <p className="text-xs uppercase tracking-[0.3em] text-gray-400 font-semibold">Painel</p>
                 <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-gray-800">
-	                {currentView === 'map' ? 'Mapa Inteligente' : currentView === 'settings' ? 'Configurações' : currentView === 'calendar' ? 'Calendário' : currentView}
-	                </h1>
+	                {viewLabel(currentView)}
+		                </h1>
 	              </div>
               <div className="flex items-center gap-2">
                 <button
@@ -905,6 +978,24 @@ const App: React.FC = () => {
       <DevtoneChatbox />
       
     </div>
+  );
+  };
+
+  return (
+    <Routes>
+      <Route path="/" element={<Navigate to={isAuthenticated ? '/dashboard' : '/login'} replace />} />
+      <Route path="/login" element={<LoginRoute />} />
+      <Route path="/register" element={<RegisterRoute />} />
+
+      <Route path="/dashboard" element={<ProtectedShell />} />
+      <Route path="/map" element={<ProtectedShell />} />
+      <Route path="/pipeline" element={<ProtectedShell />} />
+      <Route path="/discovery" element={<ProtectedShell />} />
+      <Route path="/calendar" element={<ProtectedShell />} />
+      <Route path="/settings" element={<ProtectedShell />} />
+
+      <Route path="*" element={<Navigate to={isAuthenticated ? '/dashboard' : '/login'} replace />} />
+    </Routes>
   );
 };
 
