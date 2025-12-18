@@ -95,7 +95,11 @@ const Login: React.FC<LoginProps> = ({ onLogin, onSwitchToRegister }) => {
         companySector: user.company_sector,
         businessSummary: user.business_summary,
         userRole: user.user_role,
-        subscriptionPlan: user.plan || 'Start'
+        subscriptionPlan: user.plan || 'Start',
+        smtpHost: user.smtp_host,
+        smtpPort: user.smtp_port,
+        smtpUser: user.smtp_user,
+        smtpPass: user.smtp_pass
       });
     } catch (err: any) {
       setError('Erro ao autenticar. Verifique sua conexão.');
@@ -363,7 +367,12 @@ const Login: React.FC<LoginProps> = ({ onLogin, onSwitchToRegister }) => {
   );
 
   return (
-    <div className="dark min-h-screen relative overflow-hidden bg-gradient-to-br from-[#050312] via-[#0b0f2a] to-[#0a001f] flex items-center justify-center px-4 py-10 text-white">
+    <div className="dark min-h-screen relative overflow-hidden bg-transparent flex items-center justify-center px-4 py-10 text-white">
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_14%_18%,rgba(168,85,247,0.22),transparent_38%),radial-gradient(circle_at_86%_16%,rgba(217,70,239,0.14),transparent_40%),radial-gradient(circle_at_55%_84%,rgba(59,130,246,0.10),transparent_44%)] opacity-95" />
+      <div className="pointer-events-none absolute inset-0 opacity-35 bg-[linear-gradient(to_right,rgba(168,85,247,0.14)_1px,transparent_1px),linear-gradient(to_bottom,rgba(168,85,247,0.14)_1px,transparent_1px),linear-gradient(to_right,rgba(255,255,255,0.06)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.06)_1px,transparent_1px)] bg-[size:56px_56px,56px_56px,8px_8px,8px_8px] [mask-image:radial-gradient(circle_at_45%_18%,black_0%,transparent_70%)]" />
+      <div className="pointer-events-none absolute -left-40 -top-36 h-96 w-96 rounded-full bg-purple-500/14 blur-3xl" />
+      <div className="pointer-events-none absolute -right-36 top-10 h-80 w-80 rounded-full bg-fuchsia-500/10 blur-3xl" />
+      <div className="pointer-events-none absolute right-24 bottom-10 h-72 w-72 rounded-full bg-indigo-500/12 blur-3xl" />
       <div className="absolute inset-0 pointer-events-none">
         <div className="absolute w-96 h-96 bg-purple-500/25 blur-[120px] -top-20 -left-16" />
         <div className="absolute w-80 h-80 bg-fuchsia-500/20 blur-[120px] bottom-0 right-6" />
@@ -392,11 +401,11 @@ const Login: React.FC<LoginProps> = ({ onLogin, onSwitchToRegister }) => {
                   <h2 className="text-3xl font-bold text-white">Login & Cadastro</h2>
                   <p className="text-white/60 text-sm mt-1">Mesma estética glass roxa das telas de Automação & Email.</p>
                 </div>
-                <img
-                  src="https://i.imgur.com/HkMra5d.png"
-                  alt="GeoCRM Logo"
-                  className="h-16 w-auto object-contain drop-shadow"
-                />
+	                <img
+	                  src="https://i.imgur.com/xdP1hfd.png"
+	                  alt="GeoCRM Logo"
+	                  className="h-16 w-auto object-contain drop-shadow"
+	                />
               </div>
 
               <div className="flex gap-2">

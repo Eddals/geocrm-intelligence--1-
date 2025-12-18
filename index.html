@@ -25,6 +25,9 @@
     
     <!-- Leaflet Map CSS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+    <!-- Leaflet MarkerCluster CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
     
     <style>
       body { font-family: 'Inter', sans-serif; }
@@ -392,6 +395,31 @@
       input[type=number] {
         -moz-appearance: textfield;
       }
+
+      /* === Glass inputs: remove qualquer cor ou sombra automática (incluindo autofill) === */
+      .glass-panel input,
+      .glass-panel select,
+      .glass-panel textarea {
+        background: transparent !important;
+        box-shadow: none !important;
+        -webkit-box-shadow: none !important;
+        color: inherit;
+      }
+      .glass-panel input:-webkit-autofill,
+      .glass-panel select:-webkit-autofill,
+      .glass-panel textarea:-webkit-autofill {
+        transition: background-color 9999s ease-in-out 0s !important;
+        -webkit-text-fill-color: inherit !important;
+        box-shadow: 0 0 0px 1000px transparent inset !important;
+        background: transparent !important;
+        filter: none !important;
+      }
+      .glass-panel input:autofill,
+      .glass-panel select:autofill,
+      .glass-panel textarea:autofill {
+        background: transparent !important;
+        box-shadow: none !important;
+      }
     </style>
   <script type="importmap">
 {
@@ -405,11 +433,14 @@
   }
 }
 </script>
-<!-- Leaflet JS -->
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
-<link rel="stylesheet" href="/index.css">
-</head>
-  <body class="bg-gray-50 dark:bg-gray-900 transition-colors duration-200">
+	<!-- Leaflet JS -->
+	<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+	<!-- Leaflet plugins (Cluster + Heat) -->
+	<script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+	<script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
+	<link rel="stylesheet" href="/index.css">
+ 	</head>
+  <body class="bg-transparent transition-colors duration-200">
     <div id="root"></div>
   <script type="module" src="/index.tsx"></script>
 </body>

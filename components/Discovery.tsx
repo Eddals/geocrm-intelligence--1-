@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Search, Loader2, Globe, MapPin, Download, Building, User, Mail, Phone, DollarSign, Filter, Linkedin, Star, Link, ArrowRight, CheckCircle, XCircle, Instagram, Facebook, AlertOctagon, RefreshCw, ChevronDown, Sparkles, Factory, Hammer, UtensilsCrossed, ShoppingBag, GraduationCap, Truck, HeartPulse, Briefcase, PlusCircle as PlusCircleIcon } from 'lucide-react';
+import { Search, Loader2, Globe, MapPin, Download, Building, User, Mail, Phone, DollarSign, Filter, Linkedin, Link, ArrowRight, CheckCircle, XCircle, Instagram, Facebook, AlertOctagon, RefreshCw, ChevronDown, Sparkles, Factory, Hammer, UtensilsCrossed, ShoppingBag, GraduationCap, Truck, HeartPulse, Briefcase, PlusCircle as PlusCircleIcon } from 'lucide-react';
 import { discoverLeadsWithOpenAI } from '../services/openaiService';
 import { discoverLeadsWithPerplexity } from '../services/perplexityService';
 import { extractAndQualifyWithPerplexity } from '../services/perplexityScraperService';
@@ -45,12 +45,7 @@ const INDUSTRY_ICONS: Record<string, React.ReactNode> = {
     "Turismo e Hotelaria": <MapPin className="w-3 h-3" />
 };
 
-const RATING_OPTIONS = [
-    { value: "", label: "Qualquer" },
-    { value: "low", label: "Baixo (1-2★)" },
-    { value: "medium", label: "Médio (3-4★)" },
-    { value: "high", label: "Alto (4.5+★)" }
-];
+// Rating filter UI removed (kept search logic without rating).
 
 // Data for Countries and States
 const LOCATIONS = {
@@ -79,7 +74,7 @@ const Discovery: React.FC<DiscoveryProps> = ({ addLeads, openAiKey, setDiscovery
   const [region, setRegion] = useState(''); // State/Province
   const [city, setCity] = useState('');
   const [industry, setIndustry] = useState('');
-  const [ratingFilter, setRatingFilter] = useState('');
+  const [ratingFilter] = useState(''); // deprecated (kept for backward compatibility)
 
   // Dropdown States
   const [isCountryOpen, setIsCountryOpen] = useState(false);
@@ -95,7 +90,7 @@ const Discovery: React.FC<DiscoveryProps> = ({ addLeads, openAiKey, setDiscovery
   const [results, setResults] = useState<Partial<Lead>[]>([]);
   const [selectedIndices, setSelectedIndices] = useState<number[]>([]);
   const [onlyContacts, setOnlyContacts] = useState(false);
-  const [sortBy, setSortBy] = useState<'relevance' | 'rating' | 'value'>('relevance');
+  const [sortBy, setSortBy] = useState<'relevance' | 'value'>('relevance');
   const [isSortOpen, setIsSortOpen] = useState(false);
 
   // Manual Form State
@@ -152,10 +147,10 @@ const Discovery: React.FC<DiscoveryProps> = ({ addLeads, openAiKey, setDiscovery
     try {
       let data: Partial<Lead>[] = [];
       // Prefer Perplexity
-      data = await discoverLeadsWithPerplexity(query, city, region, country === 'BR' ? 'Brasil' : 'USA', industry, ratingFilter);
+      data = await discoverLeadsWithPerplexity(query, city, region, country === 'BR' ? 'Brasil' : 'USA', industry, '');
       // Fallback OpenAI se fornecido e Perplexity vazio
       if (data.length === 0 && openAiKey) {
-          data = await discoverLeadsWithOpenAI(query, city, region, country, industry, ratingFilter, openAiKey);
+          data = await discoverLeadsWithOpenAI(query, city, region, country, industry, '', openAiKey);
       }
 
       if (data.length === 0) {
@@ -268,21 +263,6 @@ const Discovery: React.FC<DiscoveryProps> = ({ addLeads, openAiKey, setDiscovery
     setErrors({});
   };
 
-  const renderStars = (rating: number) => {
-      const r = rating || 4.5; 
-      const stars = [];
-      for (let i = 1; i <= 5; i++) {
-          if (i <= r) {
-              stars.push(<Star key={i} className="w-3 h-3 text-yellow-400 fill-yellow-400" />);
-          } else if (i - 0.5 <= r) {
-               stars.push(<Star key={i} className="w-3 h-3 text-yellow-400 fill-yellow-400 opacity-50" />);
-          } else {
-              stars.push(<Star key={i} className="w-3 h-3 text-gray-300" />);
-          }
-      }
-      return <div className="flex gap-0.5">{stars}</div>;
-  };
-
   const handleResetScraper = () => {
     setScrapedLead(null);
     setTargetUrl('');
@@ -300,7 +280,6 @@ const Discovery: React.FC<DiscoveryProps> = ({ addLeads, openAiKey, setDiscovery
   return (
     <div className="h-full flex flex-col max-w-5xl mx-auto">
       <div className="mb-6 text-center">
-        <p className="inline-flex px-3 py-1 text-xs font-semibold bg-indigo-50 text-indigo-700 rounded-full border border-indigo-100 mb-3">Nova geração • IA + filtros inteligentes</p>
         <h2 className="text-3xl font-bold text-gray-800 mb-2">Captação de Leads</h2>
         <p className="text-gray-500">Adicione novos leads manualmente, via site ou utilize nossa IA.</p>
       </div>
@@ -331,11 +310,11 @@ const Discovery: React.FC<DiscoveryProps> = ({ addLeads, openAiKey, setDiscovery
       {activeTab === 'ai' && (
         <div className="flex flex-col gap-8 items-center">
           <div className="glass-panel rounded-3xl animate-fade-in w-full max-w-6xl p-1">
-            <div className="flex items-center gap-5 border-b border-gray-100 p-6 rounded-t-2xl">
-                <div>
-                    <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
-                        <Search className="w-6 h-6 text-indigo-600" />
-                        Busca Inteligente
+	            <div className="flex items-center gap-5 p-6 rounded-t-2xl">
+	                <div>
+	                    <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
+	                        <Search className="w-6 h-6 text-indigo-600" />
+	                        Busca Inteligente
                     </h2>
                     <p className="text-gray-500 text-sm mt-1">Encontre empresas e contatos automaticamente.</p>
                 </div>
@@ -355,7 +334,7 @@ const Discovery: React.FC<DiscoveryProps> = ({ addLeads, openAiKey, setDiscovery
               </div>
 
               {/* Region filters laid out horizontally */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
                 <div className="relative" ref={countryRef}>
                     <button
                         type="button"
@@ -370,28 +349,21 @@ const Discovery: React.FC<DiscoveryProps> = ({ addLeads, openAiKey, setDiscovery
                     </button>
                     
                     {isCountryOpen && (
-                        <div className="absolute top-full left-0 w-full mt-1 bg-white/95 dark:bg-slate-900/95 border border-gray-200 dark:border-slate-700 rounded-xl shadow-lg z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-100">
-                            {Object.entries(LOCATIONS).map(([code, data]) => {
-                                const isActive = country === code;
-                                return (
-                                    <div
-                                        key={code}
-                                        onClick={() => {
-                                            setCountry(code as 'BR' | 'US');
-                                            setIsCountryOpen(false);
-                                        }}
-                                        className={`flex items-center gap-3 px-4 py-3 cursor-pointer text-sm transition-colors ${
-                                            isActive
-                                                ? 'bg-indigo-50 text-indigo-700 font-medium dark:bg-indigo-900/40 dark:text-indigo-100'
-                                                : 'text-gray-700 dark:text-slate-100 hover:bg-purple-50 hover:text-purple-700 dark:hover:bg-purple-500/20 dark:hover:text-white'
-                                        }`}
-                                    >
-                                        <img src={data.flag} alt={code} className="w-5 h-auto rounded-sm shadow-sm" />
-                                        <span className="text-sm font-medium">{data.name}</span>
-                                        {isActive && <CheckCircle className="w-3 h-3 text-indigo-600 ml-auto" />}
-                                    </div>
-                                );
-                            })}
+                        <div className="absolute top-full left-0 w-full mt-1 bg-white border border-gray-200 rounded-xl shadow-lg z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-100">
+                            {Object.entries(LOCATIONS).map(([code, data]) => (
+                                <div
+                                    key={code}
+                                    onClick={() => {
+                                        setCountry(code as 'BR' | 'US');
+                                        setIsCountryOpen(false);
+                                    }}
+                                    className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 cursor-pointer transition-colors"
+                                >
+                                    <img src={data.flag} alt={code} className="w-5 h-auto rounded-sm shadow-sm" />
+                                    <span className="text-sm font-medium text-gray-700">{data.name}</span>
+                                    {country === code && <CheckCircle className="w-3 h-3 text-indigo-600 ml-auto" />}
+                                </div>
+                            ))}
                         </div>
                     )}
                 </div>
@@ -417,7 +389,7 @@ const Discovery: React.FC<DiscoveryProps> = ({ addLeads, openAiKey, setDiscovery
                                 className={`px-4 py-2.5 cursor-pointer text-sm transition-colors ${
                                     !region
                                     ? 'bg-indigo-50 text-indigo-700 font-medium dark:bg-indigo-900/40 dark:text-indigo-100'
-                                    : 'text-gray-700 dark:text-slate-100 hover:bg-purple-50 hover:text-purple-700 dark:hover:bg-purple-500/20 dark:hover:text-white'
+                                    : 'text-gray-700 dark:text-slate-100 hover:bg-indigo-50 hover:text-indigo-700 dark:hover:bg-indigo-900/30 dark:hover:text-white'
                                 }`}
                             >
                                 Estado (Todos)
@@ -432,7 +404,7 @@ const Discovery: React.FC<DiscoveryProps> = ({ addLeads, openAiKey, setDiscovery
                                     className={`px-4 py-2.5 cursor-pointer text-sm transition-colors ${
                                         region === s
                                         ? 'bg-indigo-50 text-indigo-700 font-medium dark:bg-indigo-900/40 dark:text-indigo-100'
-                                        : 'text-gray-700 dark:text-slate-100 hover:bg-purple-50 hover:text-purple-700 dark:hover:bg-purple-500/20 dark:hover:text-white'
+                                        : 'text-gray-700 dark:text-slate-100 hover:bg-indigo-50 hover:text-indigo-700 dark:hover:bg-indigo-900/30 dark:hover:text-white'
                                     }`}
                                 >
                                     {s}
@@ -449,46 +421,21 @@ const Discovery: React.FC<DiscoveryProps> = ({ addLeads, openAiKey, setDiscovery
                     className="w-full pl-9 pr-4 py-3 border border-gray-200 rounded-xl bg-transparent text-gray-900 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all"
                     value={city}
                     onChange={(e) => setCity(e.target.value)}
-                    />
-                </div>
-              </div>
-
-              {/* Reputation + action aligned */}
-              <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
-                  <div className="flex-1">
-                      <label className="text-xs font-bold text-gray-500 uppercase mb-2 block flex items-center gap-1">
-                          <Star className="w-4 h-4 text-yellow-500" /> Reputação
-                      </label>
-                      <div className="flex flex-wrap gap-2">
-                          {RATING_OPTIONS.map((opt) => (
-                              <button
-                                  key={opt.value}
-                                  type="button"
-                                  onClick={() => setRatingFilter(opt.value)}
-                                  className={`px-4 py-2 rounded-lg text-xs font-medium border transition-all ${
-                                      ratingFilter === opt.value
-                                      ? 'glass-purple text-white border-transparent shadow-sm'
-                                      : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
-                                  }`}
-                              >
-                                  {opt.label}
-                              </button>
-                          ))}
-                      </div>
-                  </div>
-                  <div className="w-full lg:w-auto">
-                     <button
-                        type="submit"
-                        disabled={isLoading || !query || !city}
-                        className="glass-purple w-full lg:w-auto disabled:opacity-60 text-white px-6 py-3 rounded-xl font-semibold transition-all flex items-center justify-center gap-2 shadow-lg shadow-indigo-100"
-                    >
-                        {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Buscar'}
-                    </button>
-                  </div>
-              </div>
+	                    />
+	                </div>
+	                <div className="relative">
+	                    <input
+	                        type="text"
+	                        placeholder="Nicho (ex: Clínicas de Estética, Restaurantes...)"
+	                        className="w-full px-3 py-3 border border-gray-200 rounded-xl bg-transparent text-gray-900 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all"
+	                        value={industry}
+	                        onChange={(e) => setIndustry(e.target.value)}
+	                    />
+	                </div>
+	              </div>
 
                {/* Industry Tags Selection */}
-               <div className="pt-4 border-t border-gray-100">
+               <div className="pt-1">
                   <label className="text-xs font-bold text-gray-500 uppercase mb-3 block flex items-center gap-2">
                       <Filter className="w-4 h-4" /> Filtrar por Indústria
                   </label>
@@ -524,210 +471,220 @@ const Discovery: React.FC<DiscoveryProps> = ({ addLeads, openAiKey, setDiscovery
                   </div>
               </div>
 
+	              <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
+	                  <div className="flex-1" />
+	                  <div className="w-full lg:w-auto">
+	                     <button
+                        type="submit"
+                        disabled={isLoading || !query || !city}
+                        className="glass-purple w-full lg:w-auto disabled:opacity-60 text-white px-6 py-3 rounded-xl font-semibold transition-all flex items-center justify-center gap-2 shadow-lg shadow-indigo-100"
+                    >
+                        {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Buscar'}
+	                    </button>
+	                  </div>
+	              </div>
+
+	              {results.length > 0 && (
+	                <div className="pt-3">
+	                  <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 mb-4">
+	                    <div className="flex items-center gap-3 flex-wrap">
+	                      <h3 className="font-semibold text-gray-700">Resultados ({results.length})</h3>
+	                      <span className="text-xs text-gray-500">Selecionados: {selectedIndices.length}</span>
+                      <div className="flex items-center gap-2">
+                        <label className="flex items-center gap-1 text-xs text-gray-600">
+                          <input
+                            type="checkbox"
+                            checked={onlyContacts}
+                            onChange={() => setOnlyContacts(!onlyContacts)}
+                            className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                          />
+                          Somente com contato
+                        </label>
+                        <div className="relative text-xs text-gray-600">
+                          <button
+                            type="button"
+                            onClick={() => setIsSortOpen(!isSortOpen)}
+                            className="px-3 py-1.5 border border-gray-200 rounded-lg bg-white flex items-center gap-2 hover:border-indigo-300"
+	                          >
+	                            Ordenar por:{' '}
+	                            <span className="font-semibold text-gray-800 capitalize">
+	                              {sortBy === 'relevance' ? 'Relevância' : 'Valor'}
+	                            </span>
+	                            <ChevronDown className={`w-3 h-3 transition-transform ${isSortOpen ? 'rotate-180' : ''}`} />
+	                          </button>
+	                          {isSortOpen && (
+	                            <div className="absolute z-20 mt-1 w-44 glass-panel bg-white/95 dark:bg-slate-900/95 border border-gray-200 dark:border-white/10 rounded-lg shadow-lg max-h-48 overflow-y-auto custom-scrollbar">
+                              {(
+                                [
+                                  { id: 'relevance', label: 'Relevância' },
+                                  { id: 'value', label: 'Valor estimado' }
+                                ] as const
+                              ).map(opt => (
+                                <div
+	                                  key={opt.id}
+	                                  onClick={() => { setSortBy(opt.id); setIsSortOpen(false); }}
+	                                  className={`px-4 py-2 cursor-pointer transition-colors ${
+	                                    sortBy === opt.id
+	                                    ? 'bg-indigo-50 text-indigo-700 font-semibold dark:bg-indigo-900/40 dark:text-indigo-100'
+	                                    : 'text-gray-700 dark:text-slate-100 hover:bg-indigo-50 hover:text-indigo-700 dark:hover:bg-indigo-900/30 dark:hover:text-white'
+	                                  }`}
+                                >
+                                  {opt.label}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <button
+                        type="button"
+                        onClick={() => setSelectedIndices((results || []).map((_, idx) => idx))}
+                        className="text-xs px-3 py-2 rounded-lg border border-gray-200 text-gray-700 hover:border-indigo-300"
+                      >
+                        Selecionar todos
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedIndices([])}
+                        className="text-xs px-3 py-2 rounded-lg border border-gray-200 text-gray-700 hover:border-indigo-300"
+                      >
+                        Limpar seleção
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleImport}
+                        disabled={selectedIndices.length === 0}
+                        className="bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-300 disabled:text-gray-500 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
+                      >
+                        <Download className="w-4 h-4" /> Importar ({selectedIndices.length})
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+	                    {results
+	                      .map((lead, idx) => ({ lead, idx }))
+	                      .filter(item => {
+	                        if (!onlyContacts) return true;
+	                        return isValid(item.lead.email) || isValid(item.lead.phone);
+	                      })
+	                      .sort((a, b) => {
+	                        if (sortBy === 'value') return (b.lead.value || 0) - (a.lead.value || 0);
+	                        return 0;
+	                      })
+	                      .map(({ lead, idx }) => (
+                        <div 
+                          key={idx} 
+                          onClick={() => toggleSelection(idx)}
+                          className={`cursor-pointer group relative p-5 rounded-xl border transition-all duration-200 ${
+                              selectedIndices.includes(idx) 
+                              ? 'glass-purple text-white border-transparent shadow-lg ring-1 ring-indigo-400/70' 
+                              : 'glass-panel border-white/10 dark:border-white/10 bg-white/80 dark:bg-white/5 hover:border-indigo-300/70 hover:shadow-md'
+                          }`}
+                        >
+                          <div className="flex items-start justify-between mb-2">
+                              <div className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center text-indigo-500">
+                                  <Building className="w-6 h-6" />
+                              </div>
+                              {selectedIndices.includes(idx) && (
+                                  <div className="w-4 h-4 rounded-full border-2 border-indigo-500"></div>
+                              )}
+                          </div>
+	                          <div className="mb-2">
+	                              <h4 className="font-bold text-gray-800 dark:text-slate-100 text-lg leading-tight">{lead.company}</h4>
+	                               {lead.value ? (
+	                                  <div className="mt-2">
+	                                    <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 dark:bg-emerald-500/20 px-2 py-0.5 rounded-full border border-emerald-100 dark:border-emerald-500/40">
+	                                      ${lead.value.toLocaleString()}
+	                                    </span>
+	                                  </div>
+	                                ) : null}
+	                          </div>
+                          
+                          {(isValid(lead.name) || isValid(lead.contactRole)) && (
+                              <p className="text-sm font-medium text-gray-700 dark:text-slate-200 flex items-center gap-2 mb-2">
+                                  <User className="w-4 h-4 text-indigo-600 dark:text-indigo-300" />
+                                  {lead.name}
+                                  {isValid(lead.contactRole) && <span className="text-xs text-gray-500 dark:text-slate-300">• {lead.contactRole}</span>}
+                              </p>
+                          )}
+
+                          <p className="text-sm text-gray-500 dark:text-slate-300 flex items-center gap-1 mb-3">
+                              <MapPin className="w-3 h-3" /> {isValid(lead.address) ? `${lead.address}, ${lead.city}` : lead.city}
+                          </p>
+
+                          {isValid(lead.notes || lead.description) && (
+                            <p className="text-xs text-gray-600 dark:text-slate-200/80 mb-3 italic line-clamp-2">
+                              {lead.notes || lead.description}
+                            </p>
+                          )}
+
+                          {(isValid(lead.website) || isValid(lead.linkedin) || isValid(lead.instagram) || isValid(lead.facebook)) ? (
+                              <div className="flex gap-2 pt-3 border-t border-gray-100 dark:border-white/10">
+                                  {isValid(lead.website) && (
+                                      <a 
+                                          href={lead.website} 
+                                          target="_blank" 
+                                          rel="noopener noreferrer" 
+                                          onClick={(e) => e.stopPropagation()}
+                                          className="text-gray-400 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-indigo-200 transition-colors p-1 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 rounded"
+                                          title="Website"
+                                      >
+                                          <Globe className="w-4 h-4" />
+                                      </a>
+                                  )}
+                                  {isValid(lead.linkedin) && (
+                                      <a 
+                                          href={lead.linkedin} 
+                                          target="_blank" 
+                                          rel="noopener noreferrer" 
+                                          onClick={(e) => e.stopPropagation()}
+                                          className="text-gray-400 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-200 transition-colors p-1 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded"
+                                          title="LinkedIn"
+                                      >
+                                          <Linkedin className="w-4 h-4" />
+                                      </a>
+                                  )}
+                                  {isValid(lead.instagram) && (
+                                      <a 
+                                          href={lead.instagram} 
+                                          target="_blank" 
+                                          rel="noopener noreferrer" 
+                                          onClick={(e) => e.stopPropagation()}
+                                          className="text-gray-400 dark:text-slate-300 hover:text-pink-600 dark:hover:text-pink-200 transition-colors p-1 hover:bg-pink-50 dark:hover:bg-pink-900/30 rounded"
+                                          title="Instagram"
+                                      >
+                                          <Instagram className="w-4 h-4" />
+                                      </a>
+                                  )}
+                                  {isValid(lead.facebook) && (
+                                      <a 
+                                          href={lead.facebook} 
+                                          target="_blank" 
+                                          rel="noopener noreferrer" 
+                                          onClick={(e) => e.stopPropagation()}
+                                          className="text-gray-400 dark:text-slate-300 hover:text-blue-700 dark:hover:text-blue-200 transition-colors p-1 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded"
+                                          title="Facebook"
+                                      >
+                                          <Facebook className="w-4 h-4" />
+                                      </a>
+                                  )}
+                              </div>
+                          ) : (
+                              <p className="text-[10px] text-gray-400 dark:text-slate-400 italic pt-2 border-t border-gray-100 dark:border-white/10">Redes sociais não disponíveis</p>
+                          )}
+                        </div>
+                      ))}
+                  </div>
+                </div>
+              )}
+
             </form>
              {openAiKey && <p className="text-xs text-center text-green-600 mt-4 font-medium">✨ Usando OpenAI GPT-4 para resultados otimizados</p>}
           </div>
 
-          {results.length > 0 && (
-            <div className="flex-1 flex flex-col animate-fade-in xl:col-span-7">
-              <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 mb-4">
-                <div className="flex items-center gap-3 flex-wrap">
-                    <h3 className="font-semibold text-gray-700">Resultados ({results.length})</h3>
-                    <span className="text-xs text-gray-500">Selecionados: {selectedIndices.length}</span>
-                    <div className="flex items-center gap-2">
-                        <label className="flex items-center gap-1 text-xs text-gray-600">
-                            <input
-                              type="checkbox"
-                              checked={onlyContacts}
-                              onChange={() => setOnlyContacts(!onlyContacts)}
-                              className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                            />
-                            Somente com contato
-                        </label>
-                        <div className="relative text-xs text-gray-600">
-                            <button
-                              type="button"
-                              onClick={() => setIsSortOpen(!isSortOpen)}
-                              className="px-3 py-1.5 border border-gray-200 rounded-lg bg-white flex items-center gap-2 hover:border-indigo-300"
-                            >
-                              Ordenar por: <span className="font-semibold text-gray-800 capitalize">
-                                {sortBy === 'relevance' ? 'Relevância' : sortBy === 'rating' ? 'Reputação' : 'Valor'}
-                              </span>
-                              <ChevronDown className={`w-3 h-3 transition-transform ${isSortOpen ? 'rotate-180' : ''}`} />
-                            </button>
-                            {isSortOpen && (
-                              <div className="absolute z-20 mt-1 w-44 glass-panel bg-white/95 dark:bg-slate-900/95 border border-gray-200 dark:border-white/10 rounded-lg shadow-lg max-h-48 overflow-y-auto custom-scrollbar">
-                                {[
-                                  { id: 'relevance', label: 'Relevância' },
-                                  { id: 'rating', label: 'Reputação' },
-                                  { id: 'value', label: 'Valor estimado' }
-                                ].map(opt => (
-                                  <div
-                                    key={opt.id}
-                                    onClick={() => { setSortBy(opt.id as any); setIsSortOpen(false); }}
-                                    className={`px-4 py-2 cursor-pointer transition-colors ${
-                                      sortBy === opt.id
-                                      ? 'bg-indigo-50 text-indigo-700 font-semibold dark:bg-indigo-900/40 dark:text-indigo-100'
-                                      : 'text-gray-700 dark:text-slate-100 hover:bg-indigo-50 hover:text-indigo-700 dark:hover:bg-indigo-900/30 dark:hover:text-white'
-                                    }`}
-                                  >
-                                    {opt.label}
-                                  </div>
-                                ))}
-                              </div>
-                            )}
-                        </div>
-                    </div>
-                </div>
-                <div className="flex items-center gap-2 flex-wrap">
-                    <button
-                      onClick={() => setSelectedIndices((results || []).map((_, idx) => idx))}
-                      className="text-xs px-3 py-2 rounded-lg border border-gray-200 text-gray-700 hover:border-indigo-300"
-                    >
-                      Selecionar todos
-                    </button>
-                    <button
-                      onClick={() => setSelectedIndices([])}
-                      className="text-xs px-3 py-2 rounded-lg border border-gray-200 text-gray-700 hover:border-indigo-300"
-                    >
-                      Limpar seleção
-                    </button>
-                    <button 
-                        onClick={handleImport}
-                        disabled={selectedIndices.length === 0}
-                        className={`px-4 py-2 rounded-lg text-sm font-semibold flex items-center gap-2 transition-all ${
-                          selectedIndices.length === 0
-                            ? 'bg-white/10 text-gray-500 border border-white/20 cursor-not-allowed'
-                            : 'glass-purple text-white border border-purple-200/60 shadow-lg'
-                        }`}
-                    >
-                        <Download className="w-4 h-4" /> Importar ({selectedIndices.length})
-                    </button>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {results
-                  .map((lead, idx) => ({ lead, idx }))
-                  .filter(item => {
-                    if (!onlyContacts) return true;
-                    return isValid(item.lead.email) || isValid(item.lead.phone);
-                  })
-                  .sort((a, b) => {
-                    if (sortBy === 'rating') return (b.lead.rating || 0) - (a.lead.rating || 0);
-                    if (sortBy === 'value') return (b.lead.value || 0) - (a.lead.value || 0);
-                    return 0;
-                  })
-                  .map(({ lead, idx }) => (
-                  <div 
-                    key={idx} 
-                    onClick={() => toggleSelection(idx)}
-                    className={`cursor-pointer group relative p-5 rounded-xl border transition-all duration-200 ${
-                        selectedIndices.includes(idx) 
-                        ? 'glass-purple text-white border-transparent shadow-lg ring-1 ring-indigo-400/70' 
-                        : 'glass-panel border-white/10 dark:border-white/10 bg-white/80 dark:bg-white/5 hover:border-indigo-300/70 hover:shadow-md'
-                    }`}
-                  >
-                    <div className="flex items-start justify-between mb-2">
-                        <div className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center text-indigo-500">
-                            <Building className="w-6 h-6" />
-                        </div>
-                        {selectedIndices.includes(idx) && (
-                            <div className="w-4 h-4 rounded-full border-2 border-indigo-500"></div>
-                        )}
-                    </div>
-                    <div className="mb-2">
-                        <h4 className="font-bold text-gray-800 dark:text-slate-100 text-lg leading-tight">{lead.company}</h4>
-                         <div className="mt-1 flex items-center gap-2">
-                            {renderStars(lead.rating || 0)}
-                            <span className="text-[10px] text-gray-400 dark:text-slate-300 font-medium">
-                                {lead.rating ? lead.rating.toFixed(1) : ''}
-                            </span>
-                            {lead.value ? (
-                              <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 dark:bg-emerald-500/20 px-2 py-0.5 rounded-full border border-emerald-100 dark:border-emerald-500/40">
-                                ${lead.value.toLocaleString()}
-                              </span>
-                            ) : null}
-                         </div>
-                    </div>
-                    
-                    {(isValid(lead.name) || isValid(lead.contactRole)) && (
-                        <p className="text-sm font-medium text-gray-700 dark:text-slate-200 flex items-center gap-2 mb-2">
-                            <User className="w-4 h-4 text-indigo-600 dark:text-indigo-300" />
-                            {lead.name}
-                            {isValid(lead.contactRole) && <span className="text-xs text-gray-500 dark:text-slate-300">• {lead.contactRole}</span>}
-                        </p>
-                    )}
-
-                    <p className="text-sm text-gray-500 dark:text-slate-300 flex items-center gap-1 mb-3">
-                        <MapPin className="w-3 h-3" /> {isValid(lead.address) ? `${lead.address}, ${lead.city}` : lead.city}
-                    </p>
-
-                    {isValid(lead.notes || lead.description) && (
-                      <p className="text-xs text-gray-600 dark:text-slate-200/80 mb-3 italic line-clamp-2">
-                        {lead.notes || lead.description}
-                      </p>
-                    )}
-
-                    {(isValid(lead.website) || isValid(lead.linkedin) || isValid(lead.instagram) || isValid(lead.facebook)) ? (
-                        <div className="flex gap-2 pt-3 border-t border-gray-100 dark:border-white/10">
-                            {isValid(lead.website) && (
-                                <a 
-                                    href={lead.website} 
-                                    target="_blank" 
-                                    rel="noopener noreferrer" 
-                                    onClick={(e) => e.stopPropagation()}
-                                    className="text-gray-400 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-indigo-200 transition-colors p-1 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 rounded"
-                                    title="Website"
-                                >
-                                    <Globe className="w-4 h-4" />
-                                </a>
-                            )}
-                            {isValid(lead.linkedin) && (
-                                <a 
-                                    href={lead.linkedin} 
-                                    target="_blank" 
-                                    rel="noopener noreferrer" 
-                                    onClick={(e) => e.stopPropagation()}
-                                    className="text-gray-400 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-200 transition-colors p-1 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded"
-                                    title="LinkedIn"
-                                >
-                                    <Linkedin className="w-4 h-4" />
-                                </a>
-                            )}
-                            {isValid(lead.instagram) && (
-                                <a 
-                                    href={lead.instagram} 
-                                    target="_blank" 
-                                    rel="noopener noreferrer" 
-                                    onClick={(e) => e.stopPropagation()}
-                                    className="text-gray-400 dark:text-slate-300 hover:text-pink-600 dark:hover:text-pink-200 transition-colors p-1 hover:bg-pink-50 dark:hover:bg-pink-900/30 rounded"
-                                    title="Instagram"
-                                >
-                                    <Instagram className="w-4 h-4" />
-                                </a>
-                            )}
-                            {isValid(lead.facebook) && (
-                                <a 
-                                    href={lead.facebook} 
-                                    target="_blank" 
-                                    rel="noopener noreferrer" 
-                                    onClick={(e) => e.stopPropagation()}
-                                    className="text-gray-400 dark:text-slate-300 hover:text-blue-700 dark:hover:text-blue-200 transition-colors p-1 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded"
-                                    title="Facebook"
-                                >
-                                    <Facebook className="w-4 h-4" />
-                                </a>
-                            )}
-                        </div>
-                    ) : (
-                        <p className="text-[10px] text-gray-400 dark:text-slate-400 italic pt-2 border-t border-gray-100 dark:border-white/10">Redes sociais não disponíveis</p>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
         </div>
       )}
 
@@ -876,14 +833,14 @@ const Discovery: React.FC<DiscoveryProps> = ({ addLeads, openAiKey, setDiscovery
         </div>
       )}
 
-      {/* Manual Tab */}
-      {activeTab === 'manual' && (
-        <div className="max-w-3xl mx-auto w-full glass-panel rounded-2xl p-8 animate-fade-in">
-             <h3 className="font-bold text-xl text-gray-800 mb-6 flex items-center gap-2 pb-4 border-b border-gray-100">
-                <PlusCircleIcon className="w-6 h-6 text-indigo-600" />
-                Cadastro Manual de Lead
-            </h3>
-            <form onSubmit={handleManualSubmit} className="space-y-6">
+	      {/* Manual Tab */}
+	      {activeTab === 'manual' && (
+	        <div className="max-w-3xl mx-auto w-full glass-panel rounded-2xl p-8 animate-fade-in">
+	             <h3 className="font-bold text-xl text-gray-800 mb-6 flex items-center gap-2">
+	                <PlusCircleIcon className="w-6 h-6 text-indigo-600" />
+	                Cadastro Manual de Lead
+	            </h3>
+	            <form onSubmit={handleManualSubmit} className="space-y-6">
                 {/* Inputs ... */}
                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="space-y-2">
@@ -992,7 +949,7 @@ const Discovery: React.FC<DiscoveryProps> = ({ addLeads, openAiKey, setDiscovery
                         className="w-full px-4 py-2.5 border border-gray-200 rounded-lg bg-transparent text-gray-900 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all resize-none placeholder-gray-400"
                     />
                 </div>
-                <div className="pt-4 border-t border-gray-100 flex justify-end">
+                <div className="pt-4 flex justify-end">
                     <button
                         type="submit"
                         className="glass-purple text-white px-8 py-3 rounded-xl font-semibold shadow-lg shadow-indigo-100 transition-all flex items-center gap-2"

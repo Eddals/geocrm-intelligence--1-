@@ -128,6 +128,73 @@ export const generateEmailWithPerplexity = async (
   }
 };
 
+export const generateMeetingInvite = async (
+  lead: Lead,
+  settings: AppSettings,
+  provider: 'google' | 'outlook'
+): Promise<{ subject: string; message: string; proposal: string }> => {
+  const tone = settings.companySector || lead.tags?.[0] || lead.description || 'B2B';
+  const prompt = `
+    TAREFA: Crie um convite de reunião em PT-BR para o lead qualificado.
+    Ajuste o tom e exemplos para a indústria: ${tone}.
+
+    DADOS DO LEAD:
+    - Nome: ${lead.name || 'Contato'}
+    - Empresa: ${lead.company}
+    - Cargo: ${lead.contactRole || 'Responsável'}
+    - Cidade: ${lead.city || 'Cidade não informada'}
+    - Notas: ${lead.notes || lead.description || 'Sem notas adicionais'}
+
+    DADOS DO REMETENTE:
+    - Nome: ${settings.userName}
+    - Empresa: ${settings.companyName}
+
+    SAÍDA JSON ESTRITA COM CAMPOS:
+    {
+      "subject": "Assunto enxuto para email",
+      "message": "Corpo do email curto (3-5 linhas) em texto puro convidando para reunião ${provider === 'google' ? 'Google Meet' : 'Outlook/Teams'}, com CTA e urgência leve.",
+      "proposal": "Resumo de valor e agenda sugerida em 2-3 bullets."
+    }
+    Nao adicione assinatura.
+  `;
+
+  let content = await fetchJsonFromPerplexity([
+    { role: 'system', content: 'Responda apenas JSON válido. Nao use markdown.' },
+    { role: 'user', content: prompt }
+  ], 0.45);
+
+  content = content.replace(/\\\r?\n/g, '');
+  try {
+    return JSON.parse(content);
+  } catch (err) {
+    const subjectMatch = content.match(/"subject":\s*"(.*?)"/);
+    const messageMatch = content.match(/"message":\s*"(.*?)"/);
+    const proposalMatch = content.match(/"proposal":\s*"(.*?)"/);
+    if (subjectMatch && messageMatch && proposalMatch) {
+      return {
+        subject: subjectMatch[1],
+        message: messageMatch[1].replace(/\\"/g, '"'),
+        proposal: proposalMatch[1].replace(/\\"/g, '"')
+      };
+    }
+    throw new Error('Falha ao gerar convite de reunião');
+  }
+};
+
+export const generateSupportReply = async (message: string, topic: string) => {
+  const prompt = `
+  Você é um atendente direto e resolutivo da Devtone. Responda em PT-BR, curto, objetivo e sempre proponha próxima ação. Tópico: ${topic}.
+  Mensagem do visitante: "${message}"
+  Responda em texto puro, sem markdown, sem tags HTML. Traga segurança, clareza e convide para ajudar mais.`;
+
+  const content = await fetchJsonFromPerplexity([
+    { role: 'system', content: 'Responda como agente humano direto. Nunca diga que é IA. Texto puro.' },
+    { role: 'user', content: prompt }
+  ], 0.35);
+
+  return content.trim();
+};
+
 export const findNearbyPlacesWithPerplexity = async (
   lat: number,
   lng: number,

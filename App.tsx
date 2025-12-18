@@ -5,14 +5,14 @@ import LeadMap from './components/LeadMap';
 import Pipeline from './components/Pipeline';
 import Discovery from './components/Discovery';
 import Settings from './components/Settings';
-import EmailAutomation from './components/EmailAutomation';
 import Calendar from './components/Calendar';
 import Login from './components/Login';
 import Register from './components/Register';
+import DevtoneChatbox from './components/ChatWidget';
 import { Lead, PipelineStage, Stats, ViewMode, AutomationRule, AppSettings, Notification, LeadHistory, PlanTier } from './types';
 import { enrichLeadData } from './services/geminiService';
 import { enrichLeadWithOpenAI } from './services/openaiService';
-import { X, CheckCircle2, AlertTriangle, Info, Sun, Moon } from 'lucide-react';
+import { X, CheckCircle2, AlertTriangle, Info, Sun, Moon, Crown, Gauge, Cpu, MoveUpRight } from 'lucide-react';
 import { supabaseRequest } from './services/supabaseClient';
 
 const normalizeLeadFromSupabase = (row: any): Lead => ({
@@ -51,28 +51,40 @@ const toNumeric = (value: any, fallback = 0) => {
     return fallback;
 };
 
-const sanitizeLeadForSupabase = (lead: Partial<Lead> & { user_id?: string }, includeCreatedAt = false) => {
+const sanitizeLeadForSupabase = (
+    lead: Partial<Lead> & { user_id?: string },
+    options: { includeCreatedAt?: boolean; mode?: 'patch' | 'insert' } = {}
+) => {
+    const { includeCreatedAt = false, mode = 'patch' } = options;
     const allowed: (keyof Lead | 'user_id')[] = [
         'name', 'company', 'email', 'phone', 'address', 'city',
-        'status', 'source', 'value', 'notes', 'lat', 'lng'
+        'status', 'source', 'value', 'notes', 'lat', 'lng',
+        'tags', 'tasks', 'history', 'lastContact'
     ];
-    const payload: Record<string, any> = { user_id: lead.user_id };
-    if (includeCreatedAt && lead.createdAt) {
-        payload.created_at = lead.createdAt;
-    }
+
+    const payload: Record<string, any> = {};
+    if (lead.user_id !== undefined) payload.user_id = lead.user_id;
+    if (includeCreatedAt && lead.createdAt) payload.created_at = lead.createdAt;
+
     for (const key of allowed) {
-        if (lead[key] !== undefined) {
-            if (key === 'lat' || key === 'lng') {
-                payload[key] = Number(lead[key]) || 0;
-            } else if (key === 'value') {
-                payload[key] = toNumeric(lead[key], 0);
-            } else {
-                payload[key] = lead[key];
-            }
-        } else if (key === 'lat' || key === 'lng') {
-            payload[key] = 0;
+        if (lead[key] === undefined) continue;
+        if (key === 'lat' || key === 'lng') {
+            payload[key] = Number(lead[key]) || 0;
+        } else if (key === 'value') {
+            payload[key] = toNumeric(lead[key], 0);
+        } else if (key === 'lastContact') {
+            payload.last_contact = lead.lastContact;
+        } else {
+            payload[key] = lead[key];
         }
     }
+
+    // For inserts, ensure coordinates exist (avoid NULL on older rows)
+    if (mode === 'insert') {
+        if (payload.lat === undefined) payload.lat = Number(lead.lat) || 0;
+        if (payload.lng === undefined) payload.lng = Number(lead.lng) || 0;
+    }
+
     return payload;
 };
 
@@ -310,12 +322,16 @@ const App: React.FC = () => {
               companySector: userData.companySector || prev.companySector,
               businessSummary: userData.businessSummary || prev.businessSummary,
               userRole: userData.userRole || prev.userRole,
-              subscriptionPlan: (userData as any).subscriptionPlan || (userData as any).plan || prev.subscriptionPlan || 'Start'
+              subscriptionPlan: (userData as any).subscriptionPlan || (userData as any).plan || prev.subscriptionPlan || 'Start',
+              smtpHost: userData.smtpHost || prev.smtpHost,
+              smtpPort: userData.smtpPort || prev.smtpPort,
+              smtpUser: userData.smtpUser || prev.smtpUser,
+              smtpPass: userData.smtpPass || prev.smtpPass
           }));
           if (userData.id) {
               setCurrentUserId(userData.id);
               await loadLeads(userData.id);
-              localStorage.setItem('geocrm_auth', JSON.stringify({
+              const authPayload = {
                   userId: userData.id,
                   settings: {
                     userName: userData.userName,
@@ -324,9 +340,14 @@ const App: React.FC = () => {
                     companySector: userData.companySector,
                     businessSummary: userData.businessSummary,
                     userRole: userData.userRole,
-                    subscriptionPlan: (userData as any).subscriptionPlan || (userData as any).plan || 'Start'
+                    subscriptionPlan: (userData as any).subscriptionPlan || (userData as any).plan || 'Start',
+                    smtpHost: userData.smtpHost,
+                    smtpPort: userData.smtpPort,
+                    smtpUser: userData.smtpUser,
+                    smtpPass: userData.smtpPass
                   }
-              }));
+              };
+              localStorage.setItem('geocrm_auth', JSON.stringify(authPayload));
           }
       }
       setIsAuthenticated(true);
@@ -344,6 +365,21 @@ const App: React.FC = () => {
 
   const handleUpdateSettings = async (newSettings: AppSettings) => {
       setSettings(newSettings);
+      localStorage.setItem('geocrm_settings', JSON.stringify(newSettings));
+      const savedAuth = localStorage.getItem('geocrm_auth');
+      if (savedAuth) {
+          try {
+              const parsed = JSON.parse(savedAuth);
+              if (parsed?.userId) {
+                  localStorage.setItem('geocrm_auth', JSON.stringify({
+                      ...parsed,
+                      settings: { ...(parsed.settings || {}), ...newSettings }
+                  }));
+              }
+          } catch {
+              // ignore
+          }
+      }
       if (currentUserId) {
         setIsSavingSettings(true);
         try {
@@ -361,7 +397,11 @@ const App: React.FC = () => {
                 social_linkedin: newSettings.socialLinkedin,
                 social_instagram: newSettings.socialInstagram,
                 social_website: newSettings.socialWebsite,
-                plan: newSettings.subscriptionPlan
+                plan: newSettings.subscriptionPlan,
+                smtp_host: newSettings.smtpHost,
+                smtp_port: newSettings.smtpPort,
+                smtp_user: newSettings.smtpUser,
+                smtp_pass: newSettings.smtpPass
               }, 
               query: `?id=eq.${currentUserId}` 
             });
@@ -506,7 +546,11 @@ const App: React.FC = () => {
     const supabaseId = toSupabaseId(id);
     if (currentUserId && supabaseId !== null) {
         try {
-            await supabaseRequest('leads', { method: 'PATCH', body: { status: newStatus }, query: `?id=eq.${supabaseId}` });
+            const payload = sanitizeLeadForSupabase(
+                { status: newStatus, history: updatedLeadWithHistory.history, lastContact: newHistoryEntry.date },
+                { mode: 'patch' }
+            );
+            await supabaseRequest('leads', { method: 'PATCH', body: payload, query: `?id=eq.${supabaseId}` });
         } catch (e) {
             console.error('Erro ao atualizar status no Supabase', e);
         }
@@ -521,7 +565,7 @@ const App: React.FC = () => {
       const supabaseId = toSupabaseId(id);
       if (currentUserId && supabaseId !== null) {
         try {
-            const payload = sanitizeLeadForSupabase(updates as Lead, false);
+            const payload = sanitizeLeadForSupabase(updates as Lead, { mode: 'patch' });
             await supabaseRequest('leads', { method: 'PATCH', body: payload, query: `?id=eq.${supabaseId}` });
         } catch (e) {
             console.error('Erro ao salvar lead no Supabase', e);
@@ -631,7 +675,9 @@ const App: React.FC = () => {
 
     if (currentUserId) {
         try {
-            const payload = processedLeads.map(lead => sanitizeLeadForSupabase({ ...lead, user_id: currentUserId }, true));
+            const payload = processedLeads.map(lead =>
+                sanitizeLeadForSupabase({ ...lead, user_id: currentUserId }, { includeCreatedAt: true, mode: 'insert' })
+            );
             await supabaseRequest('leads', { method: 'POST', body: payload, query: '' });
             await loadLeads(currentUserId);
         } catch (e) {
@@ -716,22 +762,17 @@ const App: React.FC = () => {
             userSector={settings.companySector}
             notify={addNotification}
         />;
-      case 'email-automation':
-        if (!planRules.allowEmailAutomation) {
-            return (
-                <div className="bg-white border border-amber-200 text-amber-800 p-6 rounded-xl shadow-sm">
-                    Automação de Email está disponível somente para planos Pro ou superiores. Faça upgrade para liberar este módulo.
-                </div>
-            );
-        }
-        return <EmailAutomation 
-            leads={leads}
-            settings={settings}
-            updateLead={updateLeadDetails}
-            notify={addNotification}
-        />;
       case 'calendar':
-        return <Calendar />;
+        return (
+          <Calendar
+            currentUserId={currentUserId}
+            settings={settings}
+            leads={leads}
+            notify={addNotification}
+            updateLeadFromCalendar={updateLeadDetails}
+            updateLeadStatusFromCalendar={updateLeadStatus}
+          />
+        );
       case 'settings':
         return <Settings 
             settings={settings} 
@@ -752,11 +793,12 @@ const App: React.FC = () => {
   }
 
   return (
-    <div className={`app-shell flex min-h-screen bg-gray-50 dark:bg-[#0b0f1a] text-gray-900 dark:text-slate-100 font-sans transition-colors duration-200 relative overflow-hidden`}>
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(16,185,129,0.08),transparent_25%),radial-gradient(circle_at_82%_12%,rgba(34,197,94,0.08),transparent_22%),radial-gradient(circle_at_65%_62%,rgba(59,130,246,0.05),transparent_32%)] dark:bg-[radial-gradient(circle_at_20%_20%,rgba(16,185,129,0.14),transparent_25%),radial-gradient(circle_at_82%_12%,rgba(59,130,246,0.12),transparent_24%),radial-gradient(circle_at_65%_62%,rgba(168,85,247,0.10),transparent_32%)]" />
-      <div className="pointer-events-none absolute -left-32 -top-28 h-80 w-80 rounded-full bg-emerald-500/12 dark:bg-emerald-500/18 blur-3xl" />
-      <div className="pointer-events-none absolute -right-28 top-12 h-72 w-72 rounded-full bg-sky-500/12 dark:bg-sky-500/16 blur-3xl" />
-      <div className="pointer-events-none absolute right-24 bottom-12 h-60 w-60 rounded-full bg-emerald-400/12 dark:bg-indigo-500/14 blur-3xl" />
+    <div className={`app-shell flex min-h-screen bg-transparent text-gray-900 dark:text-slate-100 font-sans transition-colors duration-200 relative overflow-hidden`}>
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_14%_18%,rgba(168,85,247,0.22),transparent_38%),radial-gradient(circle_at_86%_16%,rgba(217,70,239,0.14),transparent_40%),radial-gradient(circle_at_55%_84%,rgba(59,130,246,0.10),transparent_44%)] opacity-95" />
+      <div className="pointer-events-none absolute inset-0 opacity-35 bg-[linear-gradient(to_right,rgba(168,85,247,0.14)_1px,transparent_1px),linear-gradient(to_bottom,rgba(168,85,247,0.14)_1px,transparent_1px),linear-gradient(to_right,rgba(255,255,255,0.06)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.06)_1px,transparent_1px)] bg-[size:56px_56px,56px_56px,8px_8px,8px_8px] [mask-image:radial-gradient(circle_at_45%_18%,black_0%,transparent_70%)]" />
+      <div className="pointer-events-none absolute -left-40 -top-36 h-96 w-96 rounded-full bg-purple-500/14 blur-3xl" />
+      <div className="pointer-events-none absolute -right-36 top-10 h-80 w-80 rounded-full bg-fuchsia-500/10 blur-3xl" />
+      <div className="pointer-events-none absolute right-24 bottom-10 h-72 w-72 rounded-full bg-indigo-500/12 blur-3xl" />
       <Sidebar 
         currentView={currentView} 
         setView={setCurrentView} 
@@ -812,14 +854,17 @@ const App: React.FC = () => {
           <div className="mb-2">
               <div className="glass-panel rounded-3xl p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border border-white/10 bg-white/60 dark:bg-white/5 backdrop-blur-xl shadow-lg shadow-purple-900/20">
                   <div className="flex items-center gap-3">
-                      <span className="text-xs font-semibold px-3 py-1.5 rounded-full bg-white text-[#9b01ec] shadow-sm border border-[#e9d5ff] dark:bg-[#9b01ec]/20 dark:text-[#d8b4fe] dark:border-[#9b01ec]/30">
+                      <span className="text-xs font-semibold px-3 py-1.5 rounded-full bg-white text-[#9b01ec] shadow-sm border border-[#e9d5ff] dark:bg-[#9b01ec]/20 dark:text-[#d8b4fe] dark:border-[#9b01ec]/30 flex items-center gap-1.5">
+                          <Crown className="w-3.5 h-3.5 animate-pulse" />
                           Plano {activePlan}
                       </span>
                       <div className="flex flex-col sm:flex-row sm:items-center sm:gap-2 text-gray-800 dark:text-slate-100">
-                        <span className="text-sm font-semibold leading-tight">
+                        <span className="text-sm font-semibold leading-tight flex items-center gap-1.5">
+                          <Gauge className="w-4 h-4 text-indigo-500 animate-pulse" />
                           Leads no mês: {Number.isFinite(planRules.leadLimit) ? `${leadsCreatedThisMonth(leads)}/${planRules.leadLimit}` : `${leadsCreatedThisMonth(leads)} / ilimitado`}
                         </span>
-                        <span className="text-[11px] uppercase tracking-[0.2em] text-emerald-600 font-semibold bg-emerald-50/80 border border-emerald-100 px-2.5 py-1 rounded-full dark:bg-emerald-400/10 dark:text-emerald-200 dark:border-emerald-500/30 shadow-sm">
+                        <span className="text-[11px] uppercase tracking-[0.2em] text-emerald-600 font-semibold bg-emerald-50/80 border border-emerald-100 px-2.5 py-1 rounded-full dark:bg-emerald-400/10 dark:text-emerald-200 dark:border-emerald-500/30 shadow-sm flex items-center gap-1.5">
+                          <Cpu className="w-3.5 h-3.5 animate-pulse" />
                           CRM Inteligente
                         </span>
                       </div>
@@ -830,8 +875,9 @@ const App: React.FC = () => {
                       </span>
                   ) : (
                       <span className="text-xs text-gray-600 dark:text-slate-200 flex items-center gap-2 bg-white/70 dark:bg-white/5 px-3 py-1.5 rounded-full border border-white/60 dark:border-white/10 shadow-sm">
-                        <span className="inline-flex h-2.5 w-2.5 rounded-full bg-amber-400 animate-pulse shadow-[0_0_0_6px_rgba(251,191,36,0.18)]" />
+                        <span className="inline-flex h-2.5 w-2.5 rounded-full bg-amber-400 animate-ping shadow-[0_0_0_6px_rgba(251,191,36,0.18)]" />
                         Ultrapassou o limite? Faça upgrade para liberar mais leads.
+                        <MoveUpRight className="w-3.5 h-3.5 text-amber-500 animate-pulse" />
                       </span>
                   )}
               </div>
@@ -840,9 +886,9 @@ const App: React.FC = () => {
               <div>
                 <p className="text-xs uppercase tracking-[0.3em] text-gray-400 font-semibold">Painel</p>
                 <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-gray-800">
-                {currentView === 'map' ? 'Mapa Inteligente' : currentView === 'settings' ? 'Configurações' : currentView === 'email-automation' ? 'Automação' : currentView === 'calendar' ? 'Calendário' : currentView}
-                </h1>
-              </div>
+	                {currentView === 'map' ? 'Mapa Inteligente' : currentView === 'settings' ? 'Configurações' : currentView === 'calendar' ? 'Calendário' : currentView}
+	                </h1>
+	              </div>
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
@@ -859,6 +905,7 @@ const App: React.FC = () => {
           </div>
         </div>
       </main>
+      <DevtoneChatbox />
       
     </div>
   );

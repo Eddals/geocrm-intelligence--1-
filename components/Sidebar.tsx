@@ -27,7 +27,6 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, setView, onLogout }) => 
     { id: 'pipeline', label: 'CRM Pipeline', icon: KanbanSquare },
     { id: 'discovery', label: 'Captação de Leads', icon: Search },
     { id: 'calendar', label: 'Calendário', icon: CalendarCheck2 },
-    { id: 'email-automation', label: 'Automação Email', icon: Mail },
   ];
 
   return (
@@ -52,9 +51,9 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, setView, onLogout }) => 
       <div className={`w-64 bg-white border-r border-gray-200 h-screen flex flex-col fixed left-0 top-0 shadow-sm z-[100] transition-transform duration-300 ${isOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}>
         <div className="p-6 flex items-center justify-center">
           <img 
-            src="https://i.imgur.com/HkMra5d.png" 
+            src="https://i.imgur.com/xdP1hfd.png" 
             alt="GeoCRM Logo" 
-            className="h-28 md:h-32 w-auto object-contain animate-in slide-in-from-left duration-700 hover:scale-105 transition-transform drop-shadow-lg"
+            className="h-36 md:h-44 w-auto object-contain animate-in slide-in-from-left duration-700 hover:scale-105 transition-transform drop-shadow-lg"
           />
         </div>
 

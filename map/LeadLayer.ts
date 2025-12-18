@@ -11,22 +11,23 @@ export type LeadFeatureProps = {
 
 const STATUS_COLORS: Record<string, string> = {
   [PipelineStage.NEW]: '#3b82f6',
-  [PipelineStage.CONTACT]: '#f59e0b',
-  [PipelineStage.CONTACTED]: '#f59e0b',
   [PipelineStage.ANALYSIS]: '#8b5cf6',
+  [PipelineStage.CONTACT]: '#f59e0b',
   [PipelineStage.QUALIFIED]: '#a855f7',
-  [PipelineStage.PROPOSAL]: '#a855f7',
-  [PipelineStage.NEGOTIATION]: '#ec4899',
   [PipelineStage.WAITING]: '#eab308',
-  [PipelineStage.WON]: '#10b981',
   [PipelineStage.CLOSED]: '#10b981',
-  [PipelineStage.LOST]: '#ef4444'
+  [PipelineStage.LOST]: '#ef4444',
+  Quente: '#f97316',
+  Morno: '#eab308',
+  Frio: '#3b82f6'
 };
 
 export const getLeadColor = (lead: Partial<Lead>) => {
-  if (!lead.id) return '#9ca3af';
-  return STATUS_COLORS[lead.status || ''] || '#7c3aed';
+  const status = typeof lead.status === 'string' ? lead.status : '';
+  return STATUS_COLORS[status] || '#7c3aed';
 };
+
+export const getLeadFeatureId = (lead: Partial<Lead>, idx: number) => lead.id || `ghost-${idx}`;
 
 export const leadsToFeatureCollection = (leads: Partial<Lead>[]): FeatureCollection<Point, LeadFeatureProps> => {
   const features: Feature<Point, LeadFeatureProps>[] = [];
@@ -36,7 +37,7 @@ export const leadsToFeatureCollection = (leads: Partial<Lead>[]): FeatureCollect
     const lng = Number(lead.lng);
     if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
 
-    const id = lead.id || `ghost-${idx}`;
+    const id = getLeadFeatureId(lead, idx);
     features.push({
       type: 'Feature',
       geometry: {

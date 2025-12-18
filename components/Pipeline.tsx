@@ -438,58 +438,63 @@ const Pipeline: React.FC<PipelineProps> = ({ leads, updateLeadStatus, updateLead
             return (
                 <div 
                     key={stage}
-                    className="flex flex-col rounded-2xl glass-panel h-fit backdrop-blur"
+                    className="flex flex-col rounded-2xl glass-panel h-fit backdrop-blur relative overflow-hidden"
                     onDragOver={handleDragOver}
                     onDrop={(e) => handleDrop(e, stage)}
                 >
-                    {/* Compact Column Header */}
-                    <div className={`p-2 border-b border-gray-200/50 dark:border-slate-700 rounded-t-xl flex justify-between items-center ${getStageColor(stage)} dark:text-slate-200`}>
-                        <div className="flex items-center gap-2">
-                            <span className={`w-1.5 h-1.5 rounded-full ${stage === PipelineStage.CLOSED ? 'bg-emerald-500' : 'bg-indigo-400'}`}></span>
-                            <h3 className="font-semibold text-gray-700 dark:text-slate-100 text-xs uppercase tracking-wide">{stage}</h3>
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <span className="text-[10px] font-bold bg-white dark:bg-slate-800 px-1.5 py-0.5 rounded text-gray-500 dark:text-slate-200 shadow-sm border border-gray-100 dark:border-slate-700">
-                              {stageLeads.length}
-                          </span>
-                          {WIP_LIMITS[stage] && (
-                            <span className="text-[9px] text-amber-600 bg-amber-50 dark:bg-amber-500/10 border border-amber-100 dark:border-amber-400/40 rounded px-1">
-                                WIP {stageLeads.length}/{WIP_LIMITS[stage]}
+                    <div
+                      aria-hidden
+                      className="absolute inset-0 opacity-30 pointer-events-none bg-[linear-gradient(to_right,rgba(34,197,94,0.12)_1px,transparent_1px),linear-gradient(to_bottom,rgba(34,197,94,0.12)_1px,transparent_1px)] bg-[size:14px_14px]"
+                    />
+                    <div className="relative z-10">
+                      {/* Compact Column Header */}
+                      <div className={`p-2 border-b border-gray-200/50 dark:border-slate-700 rounded-t-xl flex justify-between items-center ${getStageColor(stage)} dark:text-slate-200`}>
+                          <div className="flex items-center gap-2">
+                              <span className={`w-1.5 h-1.5 rounded-full ${stage === PipelineStage.CLOSED ? 'bg-emerald-500' : 'bg-indigo-400'}`}></span>
+                              <h3 className="font-semibold text-gray-700 dark:text-slate-100 text-xs uppercase tracking-wide">{stage}</h3>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <span className="text-[10px] font-bold bg-white dark:bg-slate-800 px-1.5 py-0.5 rounded text-gray-500 dark:text-slate-200 shadow-sm border border-gray-100 dark:border-slate-700">
+                                {stageLeads.length}
                             </span>
-                          )}
-                        </div>
-                    </div>
+                            {WIP_LIMITS[stage] && (
+                              <span className="text-[9px] text-amber-600 bg-amber-50 dark:bg-amber-500/10 border border-amber-100 dark:border-amber-400/40 rounded px-1">
+                                  WIP {stageLeads.length}/{WIP_LIMITS[stage]}
+                              </span>
+                            )}
+                          </div>
+                      </div>
 
-                    {/* Drop Zone / List */}
-                    <div className="p-2 space-y-2 min-h-[160px] max-h-[65vh] overflow-y-auto custom-scrollbar kanban-scroll pr-1">
-                        {stageLeads.map((lead) => (
+                      {/* Drop Zone / List */}
+                      <div className="p-2 space-y-2 min-h-[160px] max-h-[65vh] overflow-y-auto custom-scrollbar kanban-scroll pr-1">
+                          {stageLeads.map((lead) => (
                             <div
                                 key={lead.id}
                                 draggable
                                 onDragStart={(e) => handleDragStart(e, lead.id)}
-                                className="bg-white dark:bg-slate-900/80 p-3 rounded-lg shadow-sm border border-gray-100 dark:border-slate-800 cursor-grab active:cursor-grabbing hover:shadow-md transition-all group relative"
+                                className="cursor-grab active:cursor-grabbing rounded-xl border border-white/15 bg-[radial-gradient(circle_at_20%_20%,rgba(255,255,255,0.06),transparent_45%),radial-gradient(circle_at_80%_0%,rgba(168,85,247,0.12),transparent_55%),linear-gradient(145deg,rgba(14,19,36,0.95),rgba(19,28,52,0.9))] backdrop-blur-xl p-3 shadow-[0_12px_35px_rgba(0,0,0,0.32)] hover:shadow-[0_16px_40px_rgba(88,28,135,0.35)] transition-all group relative"
                                 style={{ zIndex: openMenuId === lead.id ? 50 : 'auto' }}
                             >
                                 <div className="flex justify-between items-start mb-1.5 relative">
                                     <div className="flex-1 pr-2">
                                         {lead.leadPriority && (
-                                            <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded mb-1 inline-block border ${getPriorityColor(lead.leadPriority)}`}>
+                                            <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full mb-1 inline-block border backdrop-blur ${getPriorityColor(lead.leadPriority)} bg-white/5`}>
                                                 {lead.leadPriority === 'High' ? '🔥 Alta' : lead.leadPriority === 'Medium' ? '⚠️ Média' : '💤 Baixa'}
                                             </span>
                                         )}
-                                        <h4 className="font-bold text-gray-800 text-sm leading-tight truncate" title={lead.company}>{lead.company}</h4>
+                                <h4 className="font-extrabold text-slate-50 text-sm leading-tight break-words whitespace-normal tracking-tight" title={lead.company}>{lead.company}</h4>
                                     </div>
                                     <div className="relative shrink-0 flex gap-1 items-center">
                                         <button
                                             onClick={(e) => { e.stopPropagation(); openLeadInMaps(lead); }}
-                                            className="text-gray-300 hover:text-emerald-600 hover:bg-gray-50 p-0.5 rounded transition-colors"
+                                            className="text-slate-300 hover:text-emerald-400 hover:bg-white/10 p-1 rounded transition-colors"
                                             title="Abrir no Google Maps"
                                         >
                                             <MapPin className="w-4 h-4" />
                                         </button>
                                         <button
                                             onClick={(e) => toggleExpand(lead.id, e)}
-                                            className="text-gray-300 hover:text-indigo-600 hover:bg-gray-50 p-0.5 rounded transition-colors"
+                                            className="text-slate-300 hover:text-indigo-300 hover:bg-white/10 p-1 rounded transition-colors"
                                             title="Expandir Notas e Histórico"
                                         >
                                             {expandedLeadId === lead.id ? <ChevronUp className="w-4 h-4"/> : <ChevronDown className="w-4 h-4" />}
@@ -500,7 +505,7 @@ const Pipeline: React.FC<PipelineProps> = ({ leads, updateLeadStatus, updateLead
                                                   e.stopPropagation();
                                                   setOpenMenuId(openMenuId === lead.id ? null : lead.id);
                                               }}
-                                              className="text-gray-300 hover:text-gray-600 hover:bg-gray-50 p-0.5 rounded transition-colors"
+                                              className="text-slate-300 hover:text-white hover:bg-white/10 p-1 rounded transition-colors"
                                               aria-label="Mais opções"
                                           >
                                               <MoreHorizontal className="w-4 h-4" />
@@ -515,19 +520,19 @@ const Pipeline: React.FC<PipelineProps> = ({ leads, updateLeadStatus, updateLead
                                                           setOpenMenuId(null);
                                                       }} 
                                                   />
-                                                  <div className="absolute right-0 top-6 w-32 bg-white rounded-lg shadow-xl border border-gray-100 z-50 py-1 animate-in fade-in zoom-in-95 duration-100">
+                                                  <div className="absolute right-0 top-6 w-32 bg-slate-900 text-slate-100 rounded-lg shadow-xl border border-white/10 z-50 py-1 animate-in fade-in zoom-in-95 duration-100 backdrop-blur">
                                                       <button 
                                                           onClick={(e) => { e.stopPropagation(); openEditModal(lead); }}
-                                                          className="w-full text-left px-3 py-2 text-xs text-gray-700 hover:bg-gray-50 flex items-center gap-2 transition-colors"
+                                                          className="w-full text-left px-3 py-2 text-xs hover:bg-white/10 flex items-center gap-2 transition-colors"
                                                       >
-                                                          <Edit className="w-3 h-3 text-gray-400" /> Editar
+                                                          <Edit className="w-3 h-3 text-indigo-200" /> Editar
                                                       </button>
-                                                      <div className="border-t border-gray-100 my-1"></div>
+                                                      <div className="border-t border-white/10 my-1"></div>
                                                       <button 
                                                           onClick={(e) => { e.stopPropagation(); handleDelete(lead.id); }}
-                                                          className="w-full text-left px-3 py-2 text-xs text-red-600 hover:bg-red-50 flex items-center gap-2 transition-colors"
+                                                          className="w-full text-left px-3 py-2 text-xs text-red-400 hover:bg-red-900/40 flex items-center gap-2 transition-colors"
                                                       >
-                                                          <Trash2 className="w-3 h-3 text-red-400" /> Excluir
+                                                          <Trash2 className="w-3 h-3 text-red-300" /> Excluir
                                                       </button>
                                                   </div>
                                               </>
@@ -536,15 +541,15 @@ const Pipeline: React.FC<PipelineProps> = ({ leads, updateLeadStatus, updateLead
                                     </div>
                                 </div>
                                 
-                                <div className="flex items-center gap-1 text-[10px] text-indigo-600 font-medium mb-1 truncate">
+                                <div className="flex items-center gap-1 text-[10px] text-indigo-200 font-semibold mb-1 whitespace-normal break-words">
                                     <User className="w-3 h-3" /> 
                                     {displayValue(lead.contactRole, 'Cargo não identificado')}
                                     {lead.name && lead.name !== 'Gerente' && hasData(lead.name) && (
-                                        <span className="text-gray-500 font-normal"> - {lead.name}</span>
+                                        <span className="text-slate-400 font-normal"> - {lead.name}</span>
                                     )}
                                 </div>
 
-                                <div className="flex items-center gap-1 text-[10px] text-gray-500 mb-2 truncate">
+                                <div className="flex items-center gap-1 text-[10px] text-slate-400 mb-2 whitespace-normal break-words">
                                     <MapPin className="w-3 h-3" />
                                     {displayValue(lead.city, 'Localização não encontrada')}
                                 </div>
@@ -552,23 +557,23 @@ const Pipeline: React.FC<PipelineProps> = ({ leads, updateLeadStatus, updateLead
                                 {/* Mini Actions / Contacts */}
                                 <div className="flex gap-1 mb-2">
                                     {hasData(lead.email) && (
-                                        <div title={`Email: ${lead.email}`} className="p-1 bg-blue-50 text-blue-600 rounded opacity-75 group-hover:opacity-100 transition-opacity">
+                                        <div title={`Email: ${lead.email}`} className="p-1 bg-blue-500/15 text-blue-200 rounded opacity-75 group-hover:opacity-100 transition-opacity border border-blue-400/30">
                                             <Mail className="w-3 h-3" />
                                         </div>
                                     )}
                                     {hasData(lead.phone) && (
                                         <>
-                                          <div title={`Telefone: ${lead.phone}`} className="p-1 bg-green-50 text-green-600 rounded opacity-75 group-hover:opacity-100 transition-opacity">
+                                          <div title={`Telefone: ${lead.phone}`} className="p-1 bg-emerald-500/15 text-emerald-200 rounded opacity-75 group-hover:opacity-100 transition-opacity border border-emerald-400/30">
                                               <Phone className="w-3 h-3" />
                                           </div>
                                           {isWhatsappNumber(lead.phone) && (
-                                            <div title="Verificado no WhatsApp" className="p-1 bg-emerald-50 text-emerald-700 rounded opacity-75 group-hover:opacity-100 transition-opacity">
+                                            <div title="Verificado no WhatsApp" className="p-1 bg-emerald-500/20 text-emerald-200 rounded opacity-75 group-hover:opacity-100 transition-opacity border border-emerald-400/40">
                                                 <MessageCircle className="w-3 h-3" />
                                             </div>
                                           )}
                                           <button
                                             onClick={(e) => { e.stopPropagation(); openWhatsModal(lead); }}
-                                            className="p-1 bg-emerald-50 text-emerald-700 rounded opacity-85 hover:opacity-100 transition-opacity"
+                                            className="p-1 bg-emerald-500/20 text-emerald-100 rounded opacity-85 hover:opacity-100 transition-opacity border border-emerald-400/40"
                                             title="Gerar e enviar mensagem no WhatsApp"
                                           >
                                             <MessageCircle className="w-3 h-3" />
@@ -576,13 +581,13 @@ const Pipeline: React.FC<PipelineProps> = ({ leads, updateLeadStatus, updateLead
                                         </>
                                     )}
                                 {hasData(lead.approachMessage) && (
-                                    <div title="Mensagem Gerada pela IA" className="p-1 bg-purple-50 text-purple-600 rounded opacity-75 group-hover:opacity-100 transition-opacity">
+                                    <div title="Mensagem Gerada pela IA" className="p-1 bg-purple-500/15 text-purple-200 rounded opacity-75 group-hover:opacity-100 transition-opacity border border-purple-400/30">
                                         <MessageSquare className="w-3 h-3" />
                                     </div>
                                 )}
                                     <button
                                         onClick={(e) => { e.stopPropagation(); handleNoteChange(lead.id, `${lead.notes || ''}\nPróxima ação marcada.`); }}
-                                        className="p-1 bg-gray-100 text-gray-500 rounded opacity-75 hover:opacity-100 transition-opacity text-[9px] flex items-center gap-1"
+                                        className="p-1 bg-white/5 text-slate-200 rounded opacity-75 hover:opacity-100 transition-opacity text-[9px] flex items-center gap-1 border border-white/10"
                                         title="Adicionar próxima ação"
                                     >
                                         <Clock className="w-3 h-3" /> Próxima tarefa
@@ -607,25 +612,25 @@ const Pipeline: React.FC<PipelineProps> = ({ leads, updateLeadStatus, updateLead
                                 
                                 <div className="flex justify-between items-center pt-2 border-t border-gray-50">
                                     <div className="flex flex-col">
-                                        <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-100">
+                                        <span className="text-[10px] font-bold text-emerald-100 bg-emerald-500/15 px-2 py-0.5 rounded-full border border-emerald-400/40">
                                             {formatUSD(leadValueUSD(lead))}
                                         </span>
                                         {isBrazilLead(lead) && (
-                                          <span className="text-[9px] text-gray-400">{formatBRL(Number(lead.value) || 0)}</span>
+                                          <span className="text-[9px] text-slate-400">{formatBRL(Number(lead.value) || 0)}</span>
                                         )}
                                     </div>
                                     <div className="flex items-center gap-1">
                                         {!lead.enriched && (
                                             <button 
                                             onClick={() => enrichLead(lead.id)}
-                                            className="text-[9px] bg-indigo-50 text-indigo-600 px-1.5 py-0.5 rounded hover:bg-indigo-100 font-medium flex items-center gap-1 border border-indigo-100"
+                                            className="text-[9px] bg-indigo-500/15 text-indigo-100 px-2 py-0.5 rounded-full hover:bg-indigo-500/25 font-medium flex items-center gap-1 border border-indigo-400/30"
                                             >
                                             <Bot className="w-3 h-3" /> Enriquecer
                                             </button>
                                         )}
                                         {lead.enriched && (
-                                            <span className="text-[9px] text-gray-400 flex items-center gap-0.5">
-                                                <Bot className="w-3 h-3" /> IA Check
+                                            <span className="text-[9px] text-indigo-200 flex items-center gap-0.5">
+                                                <Bot className="w-3 h-3" /> IA check
                                             </span>
                                         )}
                                     </div>
@@ -637,33 +642,33 @@ const Pipeline: React.FC<PipelineProps> = ({ leads, updateLeadStatus, updateLead
                                     const alerts: JSX.Element[] = [];
                                     if (!hasData(lead.email) && !hasData(lead.phone)) {
                                         alerts.push(
-                                            <div key="contact" className="mt-2 bg-red-50 border border-red-100 rounded p-1.5 flex items-start gap-1.5">
-                                                <AlertOctagon className="w-3 h-3 text-red-500 shrink-0 mt-0.5" />
+                                            <div key="contact" className="mt-2 bg-red-500/10 border border-red-400/30 rounded p-1.5 flex items-start gap-1.5">
+                                                <AlertOctagon className="w-3 h-3 text-red-300 shrink-0 mt-0.5" />
                                                 <div>
-                                                    <p className="text-[9px] font-bold text-red-600 leading-none mb-0.5">Dados Insuficientes</p>
-                                                    <p className="text-[8px] text-red-400 leading-tight">Contato não encontrado. Baixa chance de conversão.</p>
+                                                    <p className="text-[9px] font-bold text-red-200 leading-none mb-0.5">Dados insuficientes</p>
+                                                    <p className="text-[8px] text-red-200/80 leading-tight">Contato não encontrado. Baixa chance de conversão.</p>
                                                 </div>
                                             </div>
                                         );
                                     }
                                     if (risk.stale) {
                                         alerts.push(
-                                            <div key="stale" className="mt-2 bg-amber-50 border border-amber-100 rounded p-1.5 flex items-start gap-1.5">
-                                                <AlertTriangle className="w-3 h-3 text-amber-600 shrink-0 mt-0.5" />
+                                            <div key="stale" className="mt-2 bg-amber-500/10 border border-amber-400/30 rounded p-1.5 flex items-start gap-1.5">
+                                                <AlertTriangle className="w-3 h-3 text-amber-200 shrink-0 mt-0.5" />
                                                 <div>
-                                                    <p className="text-[9px] font-bold text-amber-700 leading-none mb-0.5">Sem contato há {risk.days}d</p>
-                                                    <p className="text-[8px] text-amber-500 leading-tight">Faça um follow-up rápido.</p>
+                                                    <p className="text-[9px] font-bold text-amber-100 leading-none mb-0.5">Sem contato há {risk.days}d</p>
+                                                    <p className="text-[8px] text-amber-100/80 leading-tight">Faça um follow-up rápido.</p>
                                                 </div>
                                             </div>
                                         );
                                     }
                                     if (risk.noOwner) {
                                         alerts.push(
-                                            <div key="owner" className="mt-2 bg-blue-50 border border-blue-100 rounded p-1.5 flex items-start gap-1.5">
-                                                <AlertTriangle className="w-3 h-3 text-blue-600 shrink-0 mt-0.5" />
+                                            <div key="owner" className="mt-2 bg-blue-500/10 border border-blue-400/30 rounded p-1.5 flex items-start gap-1.5">
+                                                <AlertTriangle className="w-3 h-3 text-blue-200 shrink-0 mt-0.5" />
                                                 <div>
-                                                    <p className="text-[9px] font-bold text-blue-700 leading-none mb-0.5">Sem dono definido</p>
-                                                    <p className="text-[8px] text-blue-500 leading-tight">Atribua um responsável.</p>
+                                                    <p className="text-[9px] font-bold text-blue-100 leading-none mb-0.5">Sem dono definido</p>
+                                                    <p className="text-[8px] text-blue-100/80 leading-tight">Atribua um responsável.</p>
                                                 </div>
                                             </div>
                                         );
@@ -673,30 +678,30 @@ const Pipeline: React.FC<PipelineProps> = ({ leads, updateLeadStatus, updateLead
 
                                 {/* Expanded Content: Notes & History */}
                                 {expandedLeadId === lead.id && (
-                                    <div className="mt-3 pt-3 border-t border-gray-100 bg-gray-50/50 -mx-3 px-3 pb-2 rounded-b-lg">
+                                    <div className="mt-3 pt-3 border-t border-white/10 bg-white/5 -mx-3 px-3 pb-2 rounded-b-lg">
                                         <div className="mb-3">
-                                            <label className="text-[10px] font-bold text-gray-500 uppercase flex items-center gap-1 mb-1">
+                                            <label className="text-[10px] font-bold text-indigo-200 uppercase flex items-center gap-1 mb-1">
                                                 <FileText className="w-3 h-3" /> Notas
                                             </label>
                                             <textarea 
-                                                className="w-full text-xs p-2 border border-gray-200 rounded bg-white text-gray-700 focus:outline-none focus:border-indigo-300 resize-none h-20 bg-transparent"
+                                                className="w-full text-xs p-2 border border-white/15 rounded-lg bg-white/5 text-slate-100 focus:outline-none focus:border-indigo-400 resize-none h-20"
                                                 defaultValue={lead.notes}
                                                 placeholder="Adicione observações..."
                                                 onBlur={(e) => handleNoteChange(lead.id, e.target.value)}
                                             />
                                         </div>
                                         <div>
-                                            <label className="text-[10px] font-bold text-gray-500 uppercase flex items-center gap-1 mb-2">
+                                            <label className="text-[10px] font-bold text-indigo-200 uppercase flex items-center gap-1 mb-2">
                                                 <FileClock className="w-3 h-3" /> Histórico
                                             </label>
                                             <div className="space-y-2 max-h-32 overflow-y-auto pr-1 custom-scrollbar">
                                                 {lead.history && lead.history.length > 0 ? (
                                                     [...lead.history].reverse().map((item, idx) => (
-                                                        <div key={idx} className="flex gap-2 items-start text-[10px]">
-                                                            <div className="mt-0.5 min-w-[6px] h-1.5 rounded-full bg-indigo-300 shrink-0"></div>
+                                                        <div key={idx} className="flex gap-2 items-start text-[10px] text-slate-200">
+                                                            <div className="mt-0.5 min-w-[6px] h-1.5 rounded-full bg-indigo-300 shrink-0 shadow-[0_0_0_3px_rgba(99,102,241,0.15)]"></div>
                                                             <div>
-                                                                <p className="text-gray-600 leading-tight">{item.description}</p>
-                                                                <p className="text-gray-400 text-[9px]">
+                                                                <p className="text-slate-200 leading-tight">{item.description}</p>
+                                                                <p className="text-slate-400 text-[9px]">
                                                                     {new Date(item.date).toLocaleDateString('pt-BR')} {new Date(item.date).toLocaleTimeString('pt-BR', {hour: '2-digit', minute:'2-digit'})}
                                                                 </p>
                                                             </div>
@@ -717,7 +722,8 @@ const Pipeline: React.FC<PipelineProps> = ({ leads, updateLeadStatus, updateLead
                                     </div>
                                 )}
                             </div>
-                        ))}
+                          ))}
+                      </div>
                     </div>
                 </div>
             );
@@ -967,7 +973,7 @@ const Pipeline: React.FC<PipelineProps> = ({ leads, updateLeadStatus, updateLead
                                     name="company" 
                                     value={createForm.company || ''} 
                                     onChange={handleCreateChange}
-                                    className={`w-full pl-10 pr-3 py-2 border ${errors.company ? 'border-red-500' : 'border-gray-300'} rounded-lg text-sm bg-transparent text-gray-900 focus:ring-2 focus:ring-indigo-500 outline-none`}
+                                    className={`w-full pl-10 pr-3 py-2 rounded-lg text-sm bg-white/10 text-gray-900 dark:text-slate-100 focus:ring-2 focus:ring-indigo-500 outline-none placeholder:text-gray-500 ${errors.company ? 'border border-red-500' : 'border border-white/15'}`}
                                     placeholder="Nome da empresa"
                                     required
                                 />
@@ -981,7 +987,7 @@ const Pipeline: React.FC<PipelineProps> = ({ leads, updateLeadStatus, updateLead
                                     <Target className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 w-4 h-4 pointer-events-none z-10" />
                                     <button
                                         type="button"
-                                        className="w-full pl-10 pr-9 py-2 border border-white/40 dark:border-slate-700 rounded-lg text-sm bg-white/30 dark:bg-slate-900/70 text-gray-900 dark:text-slate-100 text-left focus:ring-2 focus:ring-indigo-500 outline-none flex justify-between items-center backdrop-blur transition-colors"
+                                        className="w-full pl-10 pr-9 py-2 border border-white/15 rounded-lg text-sm bg-white/10 dark:bg-slate-900/70 text-gray-900 dark:text-slate-100 text-left focus:ring-2 focus:ring-indigo-500 outline-none flex justify-between items-center backdrop-blur transition-colors"
                                     >
                                         <span className={createForm.tags && createForm.tags[0] ? 'text-gray-900 dark:text-white' : 'text-gray-500 dark:text-slate-400'}>
                                             {createForm.tags && createForm.tags[0] ? createForm.tags[0] : 'Selecione a indústria'}
@@ -1015,10 +1021,10 @@ const Pipeline: React.FC<PipelineProps> = ({ leads, updateLeadStatus, updateLead
                                         name="contactRole" 
                                         value={createForm.contactRole || ''} 
                                         onChange={handleCreateChange}
-                                        className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg text-sm bg-transparent text-gray-900 focus:ring-2 focus:ring-indigo-500 outline-none" 
-                                        placeholder="Dono, Gerente..."
-                                    />
-                                </div>
+                                    className="w-full pl-10 pr-3 py-2 border border-white/15 rounded-lg text-sm bg-white/10 text-gray-900 dark:text-slate-100 focus:ring-2 focus:ring-indigo-500 outline-none placeholder:text-gray-500" 
+                                    placeholder="Dono, Gerente..."
+                                />
+                             </div>
                              </div>
                         </div>
                         <div className="grid grid-cols-2 gap-4">
@@ -1030,10 +1036,10 @@ const Pipeline: React.FC<PipelineProps> = ({ leads, updateLeadStatus, updateLead
                                         name="name" 
                                         value={createForm.name || ''} 
                                         onChange={handleCreateChange}
-                                        className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg text-sm bg-transparent text-gray-900 focus:ring-2 focus:ring-indigo-500 outline-none" 
-                                        placeholder="João Silva"
-                                        required
-                                    />
+                                    className="w-full pl-10 pr-3 py-2 border border-white/15 rounded-lg text-sm bg-white/10 text-gray-900 dark:text-slate-100 focus:ring-2 focus:ring-indigo-500 outline-none placeholder:text-gray-500" 
+                                    placeholder="João Silva"
+                                    required
+                                />
                                 </div>
                             </div>
                             <div>
@@ -1047,8 +1053,8 @@ const Pipeline: React.FC<PipelineProps> = ({ leads, updateLeadStatus, updateLead
                                         min={0}
                                         value={createForm.value ?? ''} 
                                         onChange={handleCreateChange}
-                                        className={`w-full pl-10 pr-3 py-2 border ${errors.value ? 'border-red-500' : 'border-gray-300'} rounded-lg text-sm bg-transparent text-gray-900 focus:ring-2 focus:ring-indigo-500 outline-none`}
-                                    />
+                                    className={`w-full pl-10 pr-3 py-2 rounded-lg text-sm bg-white/10 text-gray-900 dark:text-slate-100 focus:ring-2 focus:ring-indigo-500 outline-none placeholder:text-gray-500 ${errors.value ? 'border border-red-500' : 'border border-white/15'}`}
+                                />
                                 </div>
                                 {errors.value && <p className="text-xs text-red-500 mt-1">{errors.value}</p>}
                             </div>
@@ -1060,7 +1066,7 @@ const Pipeline: React.FC<PipelineProps> = ({ leads, updateLeadStatus, updateLead
                                     name="email" 
                                     value={createForm.email || ''} 
                                     onChange={handleCreateChange}
-                                    className={`w-full px-3 py-2 border ${errors.email ? 'border-red-500' : 'border-gray-300'} rounded-lg text-sm bg-transparent text-gray-900 focus:ring-2 focus:ring-indigo-500 outline-none`}
+                                    className={`w-full px-3 py-2 rounded-lg text-sm bg-white/10 text-gray-900 dark:text-slate-100 focus:ring-2 focus:ring-indigo-500 outline-none placeholder:text-gray-500 ${errors.email ? 'border border-red-500' : 'border border-white/15'}`}
                                     placeholder="contato@empresa.com"
                                 />
                                 {errors.email && <p className="text-xs text-red-500 mt-1">{errors.email}</p>}
@@ -1071,7 +1077,7 @@ const Pipeline: React.FC<PipelineProps> = ({ leads, updateLeadStatus, updateLead
                                     name="phone" 
                                     value={createForm.phone || ''} 
                                     onChange={handleCreateChange}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-transparent text-gray-900 focus:ring-2 focus:ring-indigo-500 outline-none" 
+                                    className="w-full px-3 py-2 border border-white/15 rounded-lg text-sm bg-white/10 text-gray-900 dark:text-slate-100 focus:ring-2 focus:ring-indigo-500 outline-none placeholder:text-gray-500" 
                                     placeholder="(00) 00000-0000"
                                     required
                                 />
@@ -1083,7 +1089,7 @@ const Pipeline: React.FC<PipelineProps> = ({ leads, updateLeadStatus, updateLead
                                 name="city" 
                                 value={createForm.city || ''} 
                                 onChange={handleCreateChange}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-transparent text-gray-900 focus:ring-2 focus:ring-indigo-500 outline-none" 
+                                className="w-full px-3 py-2 border border-white/15 rounded-lg text-sm bg-white/10 text-gray-900 dark:text-slate-100 focus:ring-2 focus:ring-indigo-500 outline-none placeholder:text-gray-500" 
                                 placeholder="São Paulo"
                                 required
                             />
@@ -1096,13 +1102,13 @@ const Pipeline: React.FC<PipelineProps> = ({ leads, updateLeadStatus, updateLead
                                         key={stage}
                                         type="button"
                                         onClick={() => setCreateForm({ ...createForm, status: stage })}
-                                        className={`px-3 py-2 text-xs font-semibold rounded-lg border transition-colors flex items-center gap-2 ${
+                                        className={`px-3 py-2 text-xs font-semibold rounded-lg transition-colors flex items-center gap-2 ${
                                             createForm.status === stage 
-                                            ? 'glass-purple text-white border-transparent' 
-                                            : 'bg-white/10 border border-white/20 text-white/80 hover:border-indigo-200 hover:text-white'
+                                            ? 'glass-purple text-white border border-transparent' 
+                                            : 'bg-white/10 border border-white/15 text-white/80 hover:bg-white/15'
                                         }`}
                                     >
-                                        <span className="w-4 h-4 rounded-full bg-white/30 inline-flex items-center justify-center text-[10px] text-gray-900">
+                                        <span className="w-4 h-4 rounded-full bg-white/20 inline-flex items-center justify-center text-[10px] text-gray-900">
                                           {stage === PipelineStage.NEW ? 'N' :
                                            stage === PipelineStage.ANALYSIS ? 'A' :
                                            stage === PipelineStage.CONTACT ? 'C' :

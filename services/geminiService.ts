@@ -283,28 +283,39 @@ export const enrichLeadData = async (company: string, city: string, userSector: 
     Retorne JSON: { email, phone, contactRole, approachMessage, leadPriority, tags, website, linkedin, estimatedValue }
     `;
 
-    try {
-        const response = await ai.models.generateContent({
-            model: "gemini-2.5-flash",
-            contents: prompt,
-            config: { responseMimeType: "application/json" }
-        });
-        
-        const parsed = safeJsonParse(response.text || "{}", false);
-        return {
-            email: isValidEmail(parsed.email) ? parsed.email : null,
-            contactRole: parsed.contactRole,
-            approachMessage: parsed.approachMessage,
-            leadPriority: parsed.leadPriority,
-            tags: parsed.tags || [],
-            website: parsed.website,
-            linkedin: parsed.linkedin,
-            value: parsed.estimatedValue || 0
-        };
-    } catch (e) {
-        console.error("Error enriching lead:", e);
-        return {};
+    const maxRetries = 2;
+    const wait = (ms: number) => new Promise((res) => setTimeout(res, ms));
+
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+        try {
+            const response = await ai.models.generateContent({
+                model: "gemini-2.5-flash",
+                contents: prompt,
+                config: { responseMimeType: "application/json" }
+            });
+            
+            const parsed = safeJsonParse(response.text || "{}", false);
+            return {
+                email: isValidEmail(parsed.email) ? parsed.email : null,
+                contactRole: parsed.contactRole,
+                approachMessage: parsed.approachMessage,
+                leadPriority: parsed.leadPriority,
+                tags: parsed.tags || [],
+                website: parsed.website,
+                linkedin: parsed.linkedin,
+                value: parsed.estimatedValue || 0
+            };
+        } catch (e: any) {
+            const overloaded = e?.message?.includes('overloaded') || e?.status === 'UNAVAILABLE' || e?.code === 503;
+            if (overloaded && attempt < maxRetries) {
+                await wait(600 * (attempt + 1)); // backoff
+                continue;
+            }
+            console.error("Error enriching lead:", e);
+            break;
+        }
     }
+    return {};
 };
 
 export const rankLeadsForEmailCampaign = async (leads: Lead[]): Promise<{id: string, reason: string}[]> => {

@@ -161,6 +161,12 @@ export interface AppSettings {
   smtpPort?: string;
   smtpUser?: string;
   smtpPass?: string;
+
+  // Calendar / Conferencing
+  calendarGoogleApiKey?: string;
+  calendarMeetApiKey?: string;
+  calendarZoomApiKey?: string;
+  calendarWhatsAppNumber?: string;
 }
 
 export interface Notification {
@@ -175,7 +181,7 @@ export interface ChatMessage {
   text: string;
 }
 
-export type ViewMode = 'dashboard' | 'pipeline' | 'map' | 'discovery' | 'email-automation' | 'settings' | 'calendar';
+export type ViewMode = 'dashboard' | 'pipeline' | 'map' | 'discovery' | 'settings' | 'calendar';
 
 export type EmailTone = 'formal' | 'friendly' | 'persuasive' | 'urgent' | 'consultative';
 

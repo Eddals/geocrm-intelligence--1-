@@ -1,0 +1,186 @@
+/* MapLibre (legacy) – neon purple glass theme */
+:root {
+  color-scheme: dark;
+}
+
+html,
+body {
+  min-height: 100%;
+}
+
+body {
+  background:
+    radial-gradient(circle at 12% 12%, rgba(168, 85, 247, 0.26), transparent 42%),
+    radial-gradient(circle at 88% 18%, rgba(217, 70, 239, 0.16), transparent 40%),
+    radial-gradient(circle at 52% 86%, rgba(59, 130, 246, 0.12), transparent 42%),
+    linear-gradient(180deg, #050214 0%, #06001a 45%, #09002a 100%);
+  background-attachment: fixed;
+}
+
+#root {
+  min-height: 100%;
+}
+
+.maplibregl-popup.devtone-popup .maplibregl-popup-content {
+  background: rgba(15, 23, 42, 0.92);
+  color: rgba(226, 232, 240, 0.95);
+  border: 1px solid rgba(139, 92, 246, 0.45);
+  border-radius: 16px;
+  box-shadow: 0 22px 70px rgba(0, 0, 0, 0.55), inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+  backdrop-filter: blur(16px);
+}
+
+.maplibregl-popup.devtone-popup .maplibregl-popup-close-button {
+  color: rgba(226, 232, 240, 0.8);
+  font-size: 18px;
+  line-height: 18px;
+  padding: 6px 8px;
+}
+
+.maplibregl-popup.devtone-popup .maplibregl-popup-close-button:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.95);
+  border-radius: 999px;
+}
+
+.maplibregl-popup.devtone-popup.maplibregl-popup-anchor-top .maplibregl-popup-tip,
+.maplibregl-popup.devtone-popup.maplibregl-popup-anchor-top-left .maplibregl-popup-tip,
+.maplibregl-popup.devtone-popup.maplibregl-popup-anchor-top-right .maplibregl-popup-tip {
+  border-bottom-color: rgba(15, 23, 42, 0.92);
+}
+
+.maplibregl-popup.devtone-popup.maplibregl-popup-anchor-bottom .maplibregl-popup-tip,
+.maplibregl-popup.devtone-popup.maplibregl-popup-anchor-bottom-left .maplibregl-popup-tip,
+.maplibregl-popup.devtone-popup.maplibregl-popup-anchor-bottom-right .maplibregl-popup-tip {
+  border-top-color: rgba(15, 23, 42, 0.92);
+}
+
+.maplibregl-popup.devtone-popup.maplibregl-popup-anchor-left .maplibregl-popup-tip {
+  border-right-color: rgba(15, 23, 42, 0.92);
+}
+
+.maplibregl-popup.devtone-popup.maplibregl-popup-anchor-right .maplibregl-popup-tip {
+  border-left-color: rgba(15, 23, 42, 0.92);
+}
+
+/* Leaflet (LeadMap) – neon purple markers + glass UI */
+.leaflet-container {
+  background: #070714;
+}
+
+.leaflet-tile.devtone-leaflet-tile {
+  filter: brightness(0.78) contrast(1.22) saturate(0.92);
+}
+
+.leaflet-control-attribution {
+  background: rgba(11, 11, 31, 0.68) !important;
+  color: rgba(226, 232, 240, 0.65) !important;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  padding: 6px 10px;
+  backdrop-filter: blur(14px);
+}
+
+.leaflet-control-attribution a {
+  color: rgba(196, 181, 253, 0.95) !important;
+}
+
+.leaflet-popup-content-wrapper {
+  background: rgba(11, 11, 31, 0.92) !important;
+  color: rgba(226, 232, 240, 0.92) !important;
+  border: 1px solid rgba(139, 92, 246, 0.45);
+  border-radius: 16px;
+  box-shadow: 0 22px 70px rgba(0, 0, 0, 0.55), inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+  backdrop-filter: blur(16px);
+}
+
+.leaflet-popup-tip {
+  background: rgba(11, 11, 31, 0.92) !important;
+}
+
+.leaflet-popup-close-button {
+  color: rgba(226, 232, 240, 0.75) !important;
+}
+
+.leaflet-popup-close-button:hover {
+  background: rgba(255, 255, 255, 0.08) !important;
+  color: rgba(255, 255, 255, 0.92) !important;
+  border-radius: 999px;
+}
+
+.leaflet-div-icon.lead-marker-icon,
+.leaflet-div-icon.lead-cluster-icon {
+  background: transparent !important;
+  border: none !important;
+}
+
+.lead-marker {
+  width: 14px;
+  height: 14px;
+  margin: 2px;
+  border-radius: 999px;
+  background: var(--c, #a855f7);
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.35), 0 0 18px var(--glow, rgba(168, 85, 247, 0.65));
+  transform-origin: center;
+}
+
+.lead-marker.is-selected {
+  transform: scale(1.22);
+  box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.22), 0 0 30px var(--glow, rgba(168, 85, 247, 0.75));
+}
+
+.lead-cluster-bubble {
+  width: var(--s, 48px);
+  height: var(--s, 48px);
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  color: #ffffff;
+  font-weight: 900;
+  background: radial-gradient(circle at 30% 22%, rgba(255, 255, 255, 0.22), rgba(168, 85, 247, 0.26) 35%, rgba(109, 40, 217, 0.62) 100%);
+  border: 1px solid rgba(216, 180, 252, 0.62);
+  box-shadow: 0 0 0 10px rgba(168, 85, 247, 0.12), 0 18px 70px rgba(109, 40, 217, 0.38);
+}
+
+.lead-cluster-bubble span {
+  font-size: 14px;
+  line-height: 1;
+  text-shadow: 0 10px 28px rgba(0, 0, 0, 0.55);
+}
+
+.devtone-leaflet-popup__top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.devtone-leaflet-popup__title {
+  font-weight: 900;
+  font-size: 14px;
+  line-height: 1.2;
+  color: rgba(226, 232, 240, 0.95);
+  word-break: break-word;
+}
+
+.devtone-leaflet-popup__badge {
+  font-size: 10px;
+  font-weight: 900;
+  padding: 4px 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(139, 92, 246, 0.35);
+  background: rgba(139, 92, 246, 0.22);
+  color: rgba(233, 213, 255, 0.95);
+  white-space: nowrap;
+}
+
+.devtone-leaflet-popup__meta {
+  font-size: 12px;
+  color: rgba(203, 213, 225, 0.85);
+}
+
+.devtone-leaflet-popup__muted {
+  font-size: 11px;
+  color: rgba(148, 163, 184, 0.9);
+}
